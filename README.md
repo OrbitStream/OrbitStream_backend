@@ -82,13 +82,18 @@ npm run start:prod   # production
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/merchants/register` | — | Register merchant |
+| `POST` | `/auth/challenge` | — | Request SEP-10 wallet challenge |
+| `POST` | `/auth/verify` | — | Verify SEP-10 challenge signature |
 | `POST` | `/auth/login` | — | Wallet login, returns JWT |
+| `POST` | `/auth/refresh` | JWT | Refresh/rotate JWT token |
 | `GET` | `/merchants/me` | JWT | Get profile |
 | `PATCH` | `/merchants/me` | JWT | Update profile |
 | `POST` | `/merchants/me/api-keys` | JWT | Generate API key |
 | `GET` | `/merchants/me/api-keys` | JWT | List keys |
 | `DELETE` | `/merchants/me/api-keys/:id` | JWT | Revoke key |
 | `PATCH` | `/merchants/me/webhook` | JWT | Set webhook URL |
+| `GET` | `/merchants/me/cors` | JWT | Get CORS origins |
+| `PUT` | `/merchants/me/cors` | JWT | Set CORS origins |
 
 ### Checkout
 
@@ -97,6 +102,15 @@ npm run start:prod   # production
 | `POST` | `/v1/checkout/sessions` | API Key | Create session |
 | `GET` | `/v1/checkout/sessions/:id` | — | Get status (public) |
 | `POST` | `/v1/checkout/sessions/:id/cancel` | API Key | Cancel session |
+
+### Webhooks
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET` | `/v1/webhooks/deliveries` | JWT | List recent webhook delivery records |
+| `GET` | `/v1/webhooks/dead-letter` | JWT | List dead-letter entries |
+| `POST` | `/v1/webhooks/dead-letter/:id/retry` | JWT | Re-enqueue a dead-letter entry |
+| `DELETE` | `/v1/webhooks/dead-letter/:id` | JWT | Dismiss a dead-letter entry |
 
 ### Monitoring
 
