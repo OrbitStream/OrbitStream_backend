@@ -1,14 +1,3 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { AppModule } from './app.module';
+import { startServer } from "./index";
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.enableCors({ origin: process.env.WS_CORS_ORIGIN ?? '*' });
-  app.setGlobalPrefix('api/v1');
-  const port = process.env.PORT ?? 3001;
-  await app.listen(port);
-  console.log(`OrbitStream API running on port ${port}`);
-}
-bootstrap();
+void startServer();
