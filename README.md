@@ -1,6 +1,7 @@
 # 🌊 OrbitStream Backend
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/orbitstream/OrbitStream_backend/actions/workflows/ci.yml/badge.svg)](https://github.com/orbitstream/OrbitStream_backend/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js)](https://nodejs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs)](https://nestjs.com/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7C68EE)](https://stellar.org/)
