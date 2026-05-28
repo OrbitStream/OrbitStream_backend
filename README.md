@@ -1,141 +1,121 @@
-# 🌊 OrbitStream Backend
+# Stellar Checkout Backend
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![CI](https://github.com/orbitstream/OrbitStream_backend/actions/workflows/ci.yml/badge.svg)](https://github.com/orbitstream/OrbitStream_backend/actions/workflows/ci.yml)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js)](https://nodejs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs)](https://nestjs.com/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7C68EE)](https://stellar.org/)
 
-> **The off-chain API powering OrbitStream — real-time token streaming on Stellar.**
+> **The backend API powering Stellar Checkout — Stripe-like payments for the Stellar network.**
 
-OrbitStream Backend is the NestJS service that bridges Soroban smart contracts with the OrbitStream frontend. It manages stream state, exposes a real-time WebSocket gateway for live balance updates, verifies on-chain transactions via Stellar Horizon, and provides Prometheus-grade observability.
-
----
-
-## ✨ Features
-
-- 🔐 **Wallet Authentication** — Stellar wallet-signed JWT login. No email, no password.
-- 🌊 **Stream Management** — Full lifecycle API: create, pause, resume, cancel, and claim streams.
-- ⚡ **Real-Time WebSocket** — Socket.io gateway pushes live stream_update, claimed, and status_change events to connected clients.
-- 🔗 **Stellar Integration** — Horizon API helpers for account info, balance lookups, transaction verification, and Soroban contract event fetching.
-- 🔔 **Webhook Engine** — HMAC-signed event handler for on-chain Stellar events with automatic retry logic.
-- 📊 **Observability** — Prometheus metrics and liveness probe.
+Stellar Checkout Backend is the NestJS service that handles merchant registration, checkout session management, Stellar payment detection via Horizon, and webhook dispatch. It's the engine that lets any merchant accept USDC/XLM payments in under 10 minutes.
 
 ---
 
-## 🗂️ Project Structure
+## Features
 
-\`\`\`
+- **Merchant API** — wallet-based registration, API key management, webhook configuration
+- **Checkout Sessions** — create payment sessions with unique memos, auto-expiry, status polling
+- **Payment Detection** — Horizon streaming with memo-based matching, Redis cursor persistence
+- **Webhook Dispatch** — HMAC-SHA256 signed delivery with exponential backoff retry
+- **Dual Auth** — JWT for merchant dashboard, API keys for programmatic access
+- **Observability** — Prometheus metrics and liveness probes
+
+---
+
+## Project Structure
+
+```
 src/
-├── auth/               # JWT wallet auth — controller, service, guard, strategy
-├── streams/            # Stream lifecycle — CRUD, claimable calc, WebSocket gateway
-├── stellar/            # Horizon + Soroban RPC helpers
-├── webhook/            # HMAC-signed event ingestion with retry
+├── auth/               # JWT wallet auth + API key guard
+├── merchants/          # Registration, API keys, webhook config
+├── checkout/           # Session CRUD, payment URL generation
+├── payments/           # Payment detector (Horizon polling)
+├── stellar/            # Horizon API helpers
+├── webhook/            # HMAC-signed dispatch with retry
 ├── monitoring/         # Health checks and Prometheus metrics
-└── main.ts             # App entry point
-\`\`\`
+├── db/                 # Drizzle schema + PostgreSQL client
+└── main.ts             # NestJS bootstrap
+```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - Node.js >= 20
-- PostgreSQL database
-- A Stellar testnet account
+- PostgreSQL
+- Redis
+- Stellar testnet account
 
 ### Installation
 
-\`\`\`bash
+```bash
 npm install
-\`\`\`
+```
 
 ### Environment Setup
 
-\`\`\`bash
-cp .env.example .env
-\`\`\`
-
-Key variables:
-\`\`\`env
+```env
 PORT=3001
-DATABASE_URL=postgresql://postgres:password@localhost:5432/orbitstream
-JWT_SECRET=your-secret
+DATABASE_URL=postgresql://postgres:password@localhost:5432/stellar_checkout
+JWT_SECRET=change-me-in-production
+STELLAR_NETWORK=TESTNET
 STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
-STELLAR_RPC_URL=https://soroban-testnet.stellar.org
-STREAM_CONTRACT_ID=your-deployed-contract-id
-\`\`\`
+PLATFORM_RECEIVING_ACCOUNT=<your-stellar-account>
+REDIS_URL=redis://localhost:6379
+CHECKOUT_SESSION_TTL_MINUTES=30
+```
 
 ### Running
 
-\`\`\`bash
+```bash
 npm run start:dev    # development
 npm run start:prod   # production
-\`\`\`
+```
 
 ---
 
-## 📖 API Reference
+## API Reference
 
-All routes are prefixed with \`/api/v1\`.
+### Merchants
 
-### Auth
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/merchants/register` | — | Register merchant |
+| `POST` | `/auth/login` | — | Wallet login, returns JWT |
+| `GET` | `/merchants/me` | JWT | Get profile |
+| `PATCH` | `/merchants/me` | JWT | Update profile |
+| `POST` | `/merchants/me/api-keys` | JWT | Generate API key |
+| `GET` | `/merchants/me/api-keys` | JWT | List keys |
+| `DELETE` | `/merchants/me/api-keys/:id` | JWT | Revoke key |
+| `PATCH` | `/merchants/me/webhook` | JWT | Set webhook URL |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| \`POST\` | \`/auth/login\` | Wallet-signed login — returns JWT |
+### Checkout
 
-### Streams
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| \`POST\` | \`/streams\` | Create a new token stream |
-| \`GET\` | \`/streams\` | List all streams for the authenticated wallet |
-| \`GET\` | \`/streams/:id\` | Get a single stream by ID |
-| \`GET\` | \`/streams/:id/claimable\` | Calculate claimable tokens right now |
-| \`PATCH\` | \`/streams/:id/claim\` | Record a claim transaction |
-| \`PATCH\` | \`/streams/:id/pause\` | Pause an active stream |
-| \`PATCH\` | \`/streams/:id/resume\` | Resume a paused stream |
-| \`DELETE\` | \`/streams/:id\` | Cancel a stream |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `POST` | `/v1/checkout/sessions` | API Key | Create session |
+| `GET` | `/v1/checkout/sessions/:id` | — | Get status (public) |
+| `POST` | `/v1/checkout/sessions/:id/cancel` | API Key | Cancel session |
 
 ### Monitoring
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| \`GET\` | \`/health\` | Liveness and database readiness probe |
-| \`GET\` | \`/metrics\` | Prometheus-compatible metrics |
+| `GET` | `/health` | Liveness probe |
+| `GET` | `/metrics` | Prometheus metrics |
 
 ---
 
-## ⚡ WebSocket Events
+## Related Repositories
 
-Connect to the WebSocket server at \`ws://localhost:3001\`.
-
-### Client → Server
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| \`subscribe_stream\` | \`streamId: string\` | Subscribe to live updates for a stream |
-| \`unsubscribe_stream\` | \`streamId: string\` | Unsubscribe from a stream |
-
-### Server → Client
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| \`stream_update\` | \`{ streamId, ...data }\` | Emitted on any stream state change |
-| \`claimed\` | \`{ streamId, amount, recipient }\` | Emitted when tokens are claimed |
-| \`status_change\` | \`{ streamId, status }\` | Emitted on pause, resume, or cancel |
+- [orbitstream_contracts](https://github.com/OrbitStream/orbitstream_contracts) — Escrow smart contract
+- [orbitstream_frontend](https://github.com/OrbitStream/orbitstream_frontend) — Checkout UI + merchant dashboard
+- [orbitstream_docs](https://github.com/OrbitStream/orbitstream_docs) — Documentation
+- [stellar-checkout-sdk](https://github.com/OrbitStream/stellar-checkout-sdk) — JS/TS SDK
 
 ---
 
-## 🔗 Related Repositories
+## License
 
-- [OrbitStream Contracts](https://github.com/OrbitStream/orbitstream-contracts) — Soroban smart contracts
-- [OrbitStream Frontend](https://github.com/OrbitStream/orbitstream-frontend) — Web dashboard
-- [OrbitStream Docs](https://github.com/OrbitStream/orbitstream-docs) — Documentation
-
----
-
-## 📜 License
-
-MIT License. Copyright (c) 2026 OrbitStream Protocol.
+MIT License. Copyright (c) 2026 OrbitStream.
