@@ -1,7 +1,7 @@
-# Stellar Checkout Backend
+# OrbitStream Backend
 
 ## Project
-Backend API for Stellar Checkout — a Stripe-like merchant payment gateway for Stellar.
+Backend API for OrbitStream — a Stripe-like merchant payment gateway for Stellar.
 
 ## Stack
 - Node.js 20+

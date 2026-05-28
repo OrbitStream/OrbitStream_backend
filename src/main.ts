@@ -11,7 +11,7 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
-  console.log(`Stellar Checkout API running on port ${port}`);
+  console.log(`OrbitStream API running on port ${port}`);
 }
 
 bootstrap();

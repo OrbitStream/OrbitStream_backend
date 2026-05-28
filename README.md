@@ -1,13 +1,13 @@
-# Stellar Checkout Backend
+# OrbitStream Backend
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js)](https://nodejs.org/)
 [![NestJS](https://img.shields.io/badge/NestJS-10-E0234E?logo=nestjs)](https://nestjs.com/)
 [![Stellar](https://img.shields.io/badge/Stellar-Soroban-7C68EE)](https://stellar.org/)
 
-> **The backend API powering Stellar Checkout — Stripe-like payments for the Stellar network.**
+> **The backend API powering OrbitStream — Stripe-like payments for the Stellar network.**
 
-Stellar Checkout Backend is the NestJS service that handles merchant registration, checkout session management, Stellar payment detection via Horizon, and webhook dispatch. It's the engine that lets any merchant accept USDC/XLM payments in under 10 minutes.
+OrbitStream Backend is the NestJS service that handles merchant registration, checkout session management, Stellar payment detection via Horizon, and webhook dispatch. It's the engine that lets any merchant accept USDC/XLM payments in under 10 minutes.
 
 ---
 
@@ -57,7 +57,7 @@ npm install
 
 ```env
 PORT=3001
-DATABASE_URL=postgresql://postgres:password@localhost:5432/stellar_checkout
+DATABASE_URL=postgresql://postgres:password@localhost:5432/orbitstream
 JWT_SECRET=change-me-in-production
 STELLAR_NETWORK=TESTNET
 STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
@@ -112,7 +112,7 @@ npm run start:prod   # production
 - [orbitstream_contracts](https://github.com/OrbitStream/orbitstream_contracts) — Escrow smart contract
 - [orbitstream_frontend](https://github.com/OrbitStream/orbitstream_frontend) — Checkout UI + merchant dashboard
 - [orbitstream_docs](https://github.com/OrbitStream/orbitstream_docs) — Documentation
-- [stellar-checkout-sdk](https://github.com/OrbitStream/stellar-checkout-sdk) — JS/TS SDK
+- [orbitstream-sdk](https://github.com/OrbitStream/orbitstream-sdk) — JS/TS SDK
 
 ---
 

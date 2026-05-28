@@ -39,8 +39,8 @@ export class WebhookService {
       const response = await axios.post(merchant.webhookUrl, payload, {
         headers: {
           'Content-Type': 'application/json',
-          'X-Stellar-Checkout-Signature': signature,
-          'X-Stellar-Checkout-Timestamp': new Date().toISOString(),
+          'X-OrbitStream-Signature': signature,
+          'X-OrbitStream-Timestamp': new Date().toISOString(),
         },
         timeout: 10000,
       });
@@ -99,8 +99,8 @@ export class WebhookService {
         const response = await axios.post(merchant.webhookUrl, payload, {
           headers: {
             'Content-Type': 'application/json',
-            'X-Stellar-Checkout-Signature': signature,
-            'X-Stellar-Checkout-Timestamp': new Date().toISOString(),
+            'X-OrbitStream-Signature': signature,
+            'X-OrbitStream-Timestamp': new Date().toISOString(),
           },
           timeout: 10000,
         });
