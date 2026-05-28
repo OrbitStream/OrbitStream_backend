@@ -1,95 +1,73 @@
-# OrbitStream Backend
+# Stellar Checkout Backend
 
 ## Project
-Backend API for OrbitStream — a token streaming payroll platform on Stellar.
+Backend API for Stellar Checkout — a Stripe-like merchant payment gateway for Stellar.
 
 ## Stack
 - Node.js 20+
 - TypeScript
-- Express.js
+- NestJS 10
 - Drizzle ORM
 - PostgreSQL
 - Redis
 - Stellar SDK (@stellar/stellar-sdk)
 
 ## Architecture
-Three main services:
-1. API — REST endpoints + WebSocket for real-time updates
-2. Indexer — polls Stellar Horizon, processes contract events into DB
-3. Runway Monitor — background job, alerts employers when streams run low
+Three core services:
+1. **Merchant API** — registration, API key management, webhook configuration
+2. **Checkout API** — session creation, payment URL generation, session status
+3. **Payment Detector** — Horizon streaming, memo-based payment matching, webhook dispatch
 
 ## Database Schema
-### employers
-id, wallet_address, org_name, logo_url, created_at
+### merchants
+id, wallet_address (unique), business_name, email, webhook_url, webhook_secret, logo_url, created_at
 
-### employees
-id, wallet_address, display_name, email, employer_id, created_at
+### api_keys
+id, merchant_id (FK), key_prefix, key_hash, environment (testnet/mainnet), is_active, created_at
 
-### streams
-id (mirrors contract stream_id), employer_id, employee_id, token,
-rate_per_second, deposited, withdrawn, start_time, end_time, status,
-last_indexed_at
+### checkout_sessions
+id, merchant_id (FK), amount, asset_code, asset_issuer, receiving_account, memo, status (pending/paid/expired/cancelled), success_url, cancel_url, metadata (jsonb), expires_at, created_at
 
-### claims
-id, stream_id, amount, tx_hash, claimed_at
+### payments
+id, session_id (FK), merchant_id (FK), tx_hash (unique), amount, asset_code, asset_issuer, sender_address, confirmed_at, created_at
 
-### notifications
-id, user_id, type, message, read, created_at
+### webhook_deliveries
+id, merchant_id (FK), event, payload (jsonb), response_status, delivered_at, attempts, next_retry_at, created_at
 
 ## Folder Structure
 src/
-  index.ts
-  config.ts
-  api/
-    routes/
-      auth.ts
-      streams.ts
-      employers.ts
-      employees.ts
-    middleware/
-      auth.ts
-      rateLimit.ts
-      errorHandler.ts
-  services/
-    streamService.ts
-    authService.ts
-    notificationService.ts
-  indexer/
-    listener.ts
-    processor.ts
-  models/
-  db/
-    schema.ts
-    index.ts
-    migrations/
-  notifications/
-    email.ts
-    runwayMonitor.ts
-  utils/
-    rateCalculator.ts
-    stellar.ts
+  main.ts                    - NestJS bootstrap
+  app.module.ts              - root module
+  auth/                      - JWT wallet auth + API key guard
+  merchants/                 - merchant registration, API keys, webhook config
+  checkout/                  - checkout session CRUD
+  payments/                  - payment detection service (Horizon streaming)
+  stellar/                   - Stellar Horizon/Soroban helpers
+  webhook/                   - webhook dispatch with HMAC signing
+  monitoring/                - health checks, Prometheus metrics
+  db/                        - Drizzle schema + client
+  api/middleware/             - rate limiting, error handler
 
 ## Auth
-- Wallet-based auth only (no passwords)
-- User signs a challenge message with Freighter
-- Backend verifies signature using stellar-sdk
-- Returns JWT access token + refresh token
+Two auth modes:
+1. **JWT** — wallet-based login for merchant dashboard (sign challenge, get JWT)
+2. **API Key** — for programmatic access (Authorization: Bearer sk_test_...)
 
 ## Key Rules
-- Never trust frontend-reported amounts, always verify with chain
-- Indexer is source of truth for stream state
-- All endpoints require JWT except /auth/challenge and /auth/verify
+- Never hold private keys — backend constructs unsigned txns, customer wallet signs
+- Payment detection uses Horizon streaming with Redis cursor persistence
+- Memo-based payment matching (each session gets unique memo)
+- All webhook payloads signed with HMAC-SHA256
+- Sessions expire after CHECKOUT_SESSION_TTL_MINUTES (default 30)
+- Validate all inputs with class-validator
 - Rate limit all endpoints
-- Validate all inputs with zod
-- Use drizzle for all DB operations, never raw SQL
 
 ## Environment Variables
 DATABASE_URL=
 REDIS_URL=
 JWT_SECRET=
-JWT_REFRESH_SECRET=
-STELLAR_NETWORK=testnet
-CONTRACT_ID=
-HORIZON_URL=https://horizon-testnet.stellar.org
-EMAIL_API_KEY=
+STELLAR_NETWORK=TESTNET
+STELLAR_HORIZON_URL=https://horizon-testnet.stellar.org
+PLATFORM_RECEIVING_ACCOUNT=
+CHECKOUT_SESSION_TTL_MINUTES=30
 PORT=3001

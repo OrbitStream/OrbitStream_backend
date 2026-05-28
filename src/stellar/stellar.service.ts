@@ -4,7 +4,7 @@ import axios from 'axios';
 @Injectable()
 export class StellarService {
   private readonly logger = new Logger(StellarService.name);
-  private readonly horizonUrl = process.env.STELLAR_HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  readonly horizonUrl = process.env.STELLAR_HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
 
   async getAccountInfo(walletAddress: string) {
     const { data } = await axios.get(`${this.horizonUrl}/accounts/${walletAddress}`);
@@ -33,17 +33,31 @@ export class StellarService {
     return data._embedded?.records ?? [];
   }
 
-  async getStreamContractEvents(contractId: string, cursor = 'now') {
+  async getPaymentsForAccount(accountAddress: string, cursor?: string) {
+    const params: any = { order: 'asc', limit: 50 };
+    if (cursor && cursor !== 'now') {
+      params.cursor = cursor;
+    }
     try {
-      const rpcUrl = process.env.STELLAR_RPC_URL ?? 'https://soroban-testnet.stellar.org';
-      const { data } = await axios.post(rpcUrl, {
-        jsonrpc: '2.0', id: 1, method: 'getEvents',
-        params: { startLedger: 0, filters: [{ type: 'contract', contractIds: [contractId] }], pagination: { cursor, limit: 100 } },
-      });
-      return data.result?.events ?? [];
+      const { data } = await axios.get(
+        `${this.horizonUrl}/accounts/${accountAddress}/payments`,
+        { params },
+      );
+      return data._embedded?.records ?? [];
     } catch (err) {
-      this.logger.error('Failed to fetch contract events', err.message);
+      this.logger.error('Failed to fetch payments', err.message);
       return [];
     }
+  }
+
+  async getAssetInfo(assetCode: string, assetIssuer?: string) {
+    if (assetCode === 'XLM' || assetCode === 'native') {
+      return { type: 'native', code: 'XLM' };
+    }
+    return {
+      type: 'credit_alphanum4',
+      code: assetCode,
+      issuer: assetIssuer,
+    };
   }
 }

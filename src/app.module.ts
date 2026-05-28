@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
-import { StreamsModule } from './streams/streams.module';
+import { MerchantsModule } from './merchants/merchants.module';
+import { CheckoutModule } from './checkout/checkout.module';
+import { PaymentsModule } from './payments/payments.module';
 import { StellarModule } from './stellar/stellar.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
-import { StreamGateway } from './streams/stream.gateway';
 
 @Module({
   imports: [
@@ -16,11 +17,12 @@ import { StreamGateway } from './streams/stream.gateway';
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     AuthModule,
-    StreamsModule,
+    MerchantsModule,
+    CheckoutModule,
+    PaymentsModule,
     StellarModule,
     WebhookModule,
     MonitoringModule,
   ],
-  providers: [StreamGateway],
 })
 export class AppModule {}
