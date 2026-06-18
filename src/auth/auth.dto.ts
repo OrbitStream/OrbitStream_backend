@@ -1,6 +1,16 @@
 import { IsString, IsNotEmpty, Matches, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
+export class SignedTransactionDto {
+  @IsString()
+  @IsNotEmpty()
+  tx: string;
+
+  @IsString()
+  @IsNotEmpty()
+  passphrase: string;
+}
+
 export class RequestChallengeDto {
   @IsString()
   @IsNotEmpty()
@@ -22,16 +32,6 @@ export class VerifyChallengeDto {
   @Type(() => SignedTransactionDto)
   @IsNotEmpty()
   transaction: SignedTransactionDto;
-}
-
-export class SignedTransactionDto {
-  @IsString()
-  @IsNotEmpty()
-  tx: string;
-
-  @IsString()
-  @IsNotEmpty()
-  passphrase: string;
 }
 
 export class WalletLoginDto {
