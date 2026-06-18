@@ -4,14 +4,18 @@ import { Type } from 'class-transformer';
 export class RequestChallengeDto {
   @IsString()
   @IsNotEmpty()
-  @Matches(/^G[A-Z0-9]{55}$/, { message: 'Must be a valid Stellar public key (starts with G, 56 chars)' })
+  @Matches(/^G[A-Z0-9]{55}$/, {
+    message: 'Must be a valid Stellar public key (starts with G, 56 chars)',
+  })
   walletAddress: string;
 }
 
 export class VerifyChallengeDto {
   @IsString()
   @IsNotEmpty()
-  @Matches(/^G[A-Z0-9]{55}$/, { message: 'Must be a valid Stellar public key (starts with G, 56 chars)' })
+  @Matches(/^G[A-Z0-9]{55}$/, {
+    message: 'Must be a valid Stellar public key (starts with G, 56 chars)',
+  })
   walletAddress: string;
 
   @ValidateNested()
@@ -33,6 +37,8 @@ export class SignedTransactionDto {
 export class WalletLoginDto {
   @IsString()
   @IsNotEmpty()
-  @Matches(/^G[A-Z0-9]{55}$/, { message: 'Must be a valid Stellar public key (starts with G, 56 chars)' })
+  @Matches(/^G[A-Z0-9]{55}$/, {
+    message: 'Must be a valid Stellar public key (starts with G, 56 chars)',
+  })
   walletAddress: string;
 }

@@ -87,7 +87,7 @@ export class WebhookService {
       if (!merchant?.webhookUrl || !merchant?.webhookSecret) continue;
 
       const payload = JSON.stringify({
-        ...delivery.payload as any,
+        ...(delivery.payload as any),
         timestamp: new Date().toISOString(),
       });
       const signature = crypto

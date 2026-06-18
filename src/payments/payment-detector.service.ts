@@ -54,10 +54,7 @@ export class PaymentDetectorService implements OnModuleInit {
 
     // Find pending session with this memo
     const session = await db.query.checkoutSessions.findFirst({
-      where: and(
-        eq(checkoutSessions.memo, memo),
-        eq(checkoutSessions.status, 'pending'),
-      ),
+      where: and(eq(checkoutSessions.memo, memo), eq(checkoutSessions.status, 'pending')),
     });
     if (!session) return;
 
@@ -65,13 +62,17 @@ export class PaymentDetectorService implements OnModuleInit {
     const opAmount = parseFloat(op.amount);
     const sessionAmount = parseFloat(session.amount);
     if (Math.abs(opAmount - sessionAmount) > 0.0000001) {
-      this.logger.warn(`Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`);
+      this.logger.warn(
+        `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
+      );
       return;
     }
 
     // Verify asset matches
     if (op.asset_code !== session.assetCode && session.assetCode !== 'XLM') {
-      this.logger.warn(`Asset mismatch for memo ${memo}: expected ${session.assetCode}, got ${op.asset_code}`);
+      this.logger.warn(
+        `Asset mismatch for memo ${memo}: expected ${session.assetCode}, got ${op.asset_code}`,
+      );
       return;
     }
 
@@ -107,6 +108,6 @@ export class PaymentDetectorService implements OnModuleInit {
   }
 
   private sleep(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

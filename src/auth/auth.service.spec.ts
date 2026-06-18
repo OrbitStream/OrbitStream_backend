@@ -27,15 +27,13 @@ describe('AuthService', () => {
   });
 
   it('should reject invalid wallet address', async () => {
-    await expect(
-      service.walletLogin({ walletAddress: 'invalid' }),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(service.walletLogin({ walletAddress: 'invalid' })).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('should reject empty wallet address', async () => {
-    await expect(
-      service.walletLogin({ walletAddress: '' }),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(service.walletLogin({ walletAddress: '' })).rejects.toThrow(UnauthorizedException);
   });
 
   it('should return token for valid wallet address', async () => {

@@ -81,7 +81,6 @@ export class AuthService {
 
     const nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
     const serverAccountId = this.getServerAccountId();
-    const now = Math.floor(Date.now() / 1000);
 
     try {
       const serverAccount = await new StellarSdk.Horizon.Server(
@@ -135,16 +134,12 @@ export class AuthService {
     }
 
     try {
-      const transaction = StellarSdk.TransactionBuilder.fromXDR(
-        txData.tx,
-        txData.passphrase,
-      );
+      const transaction = StellarSdk.TransactionBuilder.fromXDR(txData.tx, txData.passphrase);
 
       if (transaction.source != walletAddress) {
         throw new UnauthorizedException('Transaction source does not match wallet address');
       }
 
-      const networkPassphrase = this.getNetworkPassphrase();
       const serverKeypair = this.getServerKeypair();
 
       const signatureHint = transaction.signatures[0].hint();

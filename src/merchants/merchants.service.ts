@@ -34,11 +34,7 @@ export class MerchantsService {
   }
 
   async update(id: string, data: { businessName?: string; email?: string; logoUrl?: string }) {
-    const [updated] = await db
-      .update(merchants)
-      .set(data)
-      .where(eq(merchants.id, id))
-      .returning();
+    const [updated] = await db.update(merchants).set(data).where(eq(merchants.id, id)).returning();
     return updated;
   }
 
