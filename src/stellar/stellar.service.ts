@@ -53,10 +53,9 @@ export class StellarService {
     const params: any = { order: 'asc', limit: 50 };
     if (cursor && cursor !== 'now') params.cursor = cursor;
 
-    const response = await axios.get(
-      `${this.horizonUrl}/accounts/${accountAddress}/payments`,
-      { params },
-    );
+    const response = await axios.get(`${this.horizonUrl}/accounts/${accountAddress}/payments`, {
+      params,
+    });
 
     return {
       records: response.data._embedded?.records ?? [],

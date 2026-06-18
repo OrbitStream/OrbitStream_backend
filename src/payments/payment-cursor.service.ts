@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../redis/redis.service';
 
-const CURSOR_TTL_S = 86_400;   // 24 hours
-const LOCK_TTL_S   = 30;       // 30 seconds — longer than the 3s poll interval
+const CURSOR_TTL_S = 86_400; // 24 hours
+const LOCK_TTL_S = 30; // 30 seconds — longer than the 3s poll interval
 const CHECKPOINT_MAX = 50;
 export const PERSIST_EVERY = 10;
 

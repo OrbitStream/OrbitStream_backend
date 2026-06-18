@@ -3,10 +3,11 @@ import { PaymentCursorService, PERSIST_EVERY } from '../payments/payment-cursor.
 import { RedisService } from '../redis/redis.service';
 import RedisMock from 'ioredis-mock';
 
-// Stub RedisService backed by ioredis-mock
+// ioredis-mock shares its data store across instances within a Jest worker.
+// A single shared mock is created once; beforeEach flushes it to guarantee isolation.
+const sharedMock = new RedisMock();
 function buildRedisService(): RedisService {
-  const mock = new RedisMock();
-  return { getClient: () => mock } as unknown as RedisService;
+  return { getClient: () => sharedMock } as unknown as RedisService;
 }
 
 describe('PaymentCursorService', () => {
@@ -14,12 +15,10 @@ describe('PaymentCursorService', () => {
   let redisService: RedisService;
 
   beforeEach(async () => {
+    await sharedMock.flushall();
     redisService = buildRedisService();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        PaymentCursorService,
-        { provide: RedisService, useValue: redisService },
-      ],
+      providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
     }).compile();
     service = module.get(PaymentCursorService);
   });
@@ -132,6 +131,119 @@ describe('PaymentCursorService', () => {
   describe('PERSIST_EVERY constant', () => {
     it('is exported and equals 10', () => {
       expect(PERSIST_EVERY).toBe(10);
+    });
+  });
+
+  describe('crash recovery simulation', () => {
+    it('replays from last flush point after a partial-batch crash (< PERSIST_EVERY ops)', async () => {
+      // Establish a stable flush point at '1000'
+      await service.updateCursor(ACCOUNT, 'now', '1000');
+      await service.appendCheckpoint(ACCOUNT, '1000');
+
+      // 3 more ops checkpointed but cursor NOT flushed yet (batch < PERSIST_EVERY=10)
+      for (const token of ['1100', '1200', '1300']) {
+        await service.appendCheckpoint(ACCOUNT, token);
+      }
+
+      // Simulate restart: new service instance backed by the SAME Redis mock
+      const restarted = (
+        await Test.createTestingModule({
+          providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
+        }).compile()
+      ).get(PaymentCursorService);
+
+      // cursor='1000' is NOT ahead of checkpoint='1300' → returns '1000' (safe replay point)
+      const cursor = await restarted.restoreCursor(ACCOUNT);
+      expect(cursor).toBe('1000');
+    });
+
+    it('rolls back to checkpoint when stored cursor is unexpectedly ahead', async () => {
+      // cursor was flushed to '2000' but checkpoint list only reached '1500'
+      await service.updateCursor(ACCOUNT, 'now', '2000');
+      await service.appendCheckpoint(ACCOUNT, '1500');
+
+      const restarted = (
+        await Test.createTestingModule({
+          providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
+        }).compile()
+      ).get(PaymentCursorService);
+
+      // '2000' IS ahead of '1500' → rolls back to safe checkpoint '1500'
+      const cursor = await restarted.restoreCursor(ACCOUNT);
+      expect(cursor).toBe('1500');
+    });
+
+    it('returns "now" when neither cursor nor checkpoint survived the crash', async () => {
+      // Fresh Redis state — nothing stored
+      const restarted = (
+        await Test.createTestingModule({
+          providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
+        }).compile()
+      ).get(PaymentCursorService);
+
+      const cursor = await restarted.restoreCursor(ACCOUNT);
+      expect(cursor).toBe('now');
+    });
+  });
+
+  describe('full persist-and-restore integration flow', () => {
+    it('restores the exact cursor after one complete PERSIST_EVERY flush cycle', async () => {
+      let currentCursor = 'now';
+
+      for (let i = 1; i <= PERSIST_EVERY; i++) {
+        const token = String(i * 100);
+        await service.appendCheckpoint(ACCOUNT, token);
+        if (i === PERSIST_EVERY) {
+          await service.updateCursor(ACCOUNT, currentCursor, token);
+          currentCursor = token;
+        }
+      }
+
+      const restarted = (
+        await Test.createTestingModule({
+          providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
+        }).compile()
+      ).get(PaymentCursorService);
+
+      expect(await restarted.restoreCursor(ACCOUNT)).toBe('1000');
+    });
+
+    it('persists the latest cursor across multiple flush cycles', async () => {
+      let currentCursor = 'now';
+
+      for (let i = 1; i <= PERSIST_EVERY * 2; i++) {
+        const token = String(i * 100);
+        await service.appendCheckpoint(ACCOUNT, token);
+        if (i % PERSIST_EVERY === 0) {
+          await service.updateCursor(ACCOUNT, currentCursor, token);
+          currentCursor = token;
+        }
+      }
+
+      const restarted = (
+        await Test.createTestingModule({
+          providers: [PaymentCursorService, { provide: RedisService, useValue: redisService }],
+        }).compile()
+      ).get(PaymentCursorService);
+
+      // Second cycle flushed at op 20 → token '2000'
+      expect(await restarted.restoreCursor(ACCOUNT)).toBe('2000');
+    });
+
+    it('CAS prevents a stale replica from overwriting a newer cursor', async () => {
+      const ok0 = await service.updateCursor(ACCOUNT, 'now', '100000');
+      expect(ok0).toBe(true);
+
+      // Replica A advances correctly
+      const okA = await service.updateCursor(ACCOUNT, '100000', '200000');
+      expect(okA).toBe(true);
+
+      // Stale replica B tries to write from the old value — must be rejected
+      const okB = await service.updateCursor(ACCOUNT, '100000', '300000');
+      expect(okB).toBe(false);
+
+      // Cursor must reflect A's update, not B's
+      expect(await service.restoreCursor(ACCOUNT)).toBe('200000');
     });
   });
 

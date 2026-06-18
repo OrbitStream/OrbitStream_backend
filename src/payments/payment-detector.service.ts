@@ -8,12 +8,12 @@ import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { PaymentCursorService, PERSIST_EVERY } from './payment-cursor.service';
 
-const DEFAULT_INTERVAL_MS  = 3_000;
-const BACKOFF_429_MS       = 10_000;
-const BACKOFF_5XX_MS       = 5_000;
+const DEFAULT_INTERVAL_MS = 3_000;
+const BACKOFF_429_MS = 10_000;
+const BACKOFF_5XX_MS = 5_000;
 const BACKOFF_429_DURATION = 60_000;
 const BACKOFF_5XX_DURATION = 30_000;
-const RATE_LIMIT_WARN_AT   = 10;
+const RATE_LIMIT_WARN_AT = 10;
 
 @Injectable()
 export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
