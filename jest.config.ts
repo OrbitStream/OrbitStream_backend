@@ -10,6 +10,7 @@ const config: Config = {
   collectCoverageFrom: ['**/*.ts', '!main.ts', '!index.ts', '!**/*.module.ts'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',
+  setupFiles: ['../jest-setup.ts'],
 };
 
 export default config;

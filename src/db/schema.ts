@@ -34,6 +34,7 @@ export const merchants = pgTable('merchants', {
   webhookUrl: text('webhook_url'),
   webhookSecret: text('webhook_secret'),
   logoUrl: text('logo_url'),
+  corsOrigins: jsonb('cors_origins').default([]),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 

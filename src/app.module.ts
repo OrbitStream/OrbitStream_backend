@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthModule } from './auth/auth.module';
 import { MerchantsModule } from './merchants/merchants.module';
@@ -9,6 +9,8 @@ import { WebhookModule } from './webhook/webhook.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { RedisModule } from './redis/redis.module';
 import { RateLimitModule } from './api/middleware/rate-limit.module';
+import { DynamicCorsMiddleware } from './middleware/dynamic-cors.middleware';
+import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 
 @Module({
   imports: [
@@ -29,4 +31,10 @@ import { RateLimitModule } from './api/middleware/rate-limit.module';
     MonitoringModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
+
+    consumer.apply(DynamicCorsMiddleware).forRoutes('*');
+  }
+}
