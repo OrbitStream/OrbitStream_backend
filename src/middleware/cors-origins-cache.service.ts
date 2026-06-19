@@ -36,13 +36,13 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
       const pipe = this.redis.getClient().pipeline();
 
       for (const m of allMerchants) {
-        const origins: string[] = (m.corsOrigins as string[]) ?? [];
+        const origins: string[] = (m.corsOrigins ?? []) as string[];
         pipe.set(`${CORS_CACHE_KEY}:${m.id}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
       }
 
       const allOrigins = new Set<string>();
       for (const m of allMerchants) {
-        const origins: string[] = (m.corsOrigins as string[]) ?? [];
+        const origins: string[] = (m.corsOrigins ?? []) as string[];
         for (const o of origins) allOrigins.add(o);
       }
       pipe.set(ALL_MERCHANT_ORIGINS_KEY, JSON.stringify([...allOrigins]), 'PX', CACHE_TTL_MS);
@@ -63,7 +63,7 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
       where: eq(merchants.id, merchantId),
       columns: { corsOrigins: true },
     });
-    const origins: string[] = (merchant?.corsOrigins as string[]) ?? [];
+    const origins: string[] = (merchant?.corsOrigins ?? []) as string[];
     await this.redis
       .getClient()
       .set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
@@ -81,7 +81,7 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
     });
     const origins = new Set<string>();
     for (const m of allMerchants) {
-      const o: string[] = (m.corsOrigins as string[]) ?? [];
+      const o: string[] = (m.corsOrigins ?? []) as string[];
       for (const origin of o) origins.add(origin);
     }
     const result = [...origins];
@@ -93,7 +93,14 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
 
   async invalidateMerchantCache(merchantId: string): Promise<void> {
     await this.redis.getClient().del(`${CORS_CACHE_KEY}:${merchantId}`);
-    await this.refreshCache();
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(merchants.id, merchantId),
+      columns: { corsOrigins: true },
+    });
+    const origins = (merchant?.corsOrigins ?? []) as string[];
+    await this.redis
+      .getClient()
+      .set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
   }
 
   invalidateAllCache(): void {

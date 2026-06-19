@@ -28,16 +28,18 @@ function originMatches(origin: string, allowed: string[]): boolean {
 @Injectable()
 export class DynamicCorsMiddleware implements NestMiddleware {
   private readonly logger = new Logger(DynamicCorsMiddleware.name);
+  private readonly platformOrigin: string;
 
-  constructor(private readonly corsCache: CorsOriginsCacheService) {}
+  constructor(private readonly corsCache: CorsOriginsCacheService) {
+    const domain = process.env.PLATFORM_DOMAIN ?? 'http://localhost:3001';
+    this.platformOrigin = new URL(domain).origin;
+  }
 
   async use(req: Request, res: Response, next: NextFunction): Promise<void> {
     const origin = req.headers['origin'] as string | undefined;
     const method = req.method;
     const path = req.path;
     const group = getRouteGroup(path, method);
-
-    const platformDomain = process.env.PLATFORM_DOMAIN ?? 'http://localhost:3001';
 
     let allowedOrigin: string | null = null;
 
@@ -50,23 +52,21 @@ export class DynamicCorsMiddleware implements NestMiddleware {
       }
       case 'merchant_api': {
         if (!origin) {
-          allowedOrigin = platformDomain;
+          allowedOrigin = this.platformOrigin;
           break;
         }
         const allowed = await this.getAllowedMerchantOrigins();
-        const platformOrigin = new URL(platformDomain).origin;
-        if (originMatches(origin, [...allowed, platformOrigin])) {
+        if (originMatches(origin, [...allowed, this.platformOrigin])) {
           allowedOrigin = origin;
         }
         break;
       }
       case 'dashboard': {
         if (!origin) {
-          allowedOrigin = platformDomain;
+          allowedOrigin = this.platformOrigin;
           break;
         }
-        const platformOrigin = new URL(platformDomain).origin;
-        if (origin === platformOrigin) {
+        if (origin === this.platformOrigin) {
           allowedOrigin = origin;
         }
         break;

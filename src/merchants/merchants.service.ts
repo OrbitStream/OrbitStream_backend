@@ -97,7 +97,7 @@ export class MerchantsService {
 
   async getCorsOrigins(merchantId: string): Promise<string[]> {
     const merchant = await this.findById(merchantId);
-    return (merchant.corsOrigins as string[]) ?? [];
+    return (merchant.corsOrigins ?? []) as string[];
   }
 
   async setCorsOrigins(merchantId: string, origins: string[]): Promise<string[]> {
@@ -108,6 +108,6 @@ export class MerchantsService {
       .returning();
     if (!updated) throw new NotFoundException('Merchant not found');
     await this.corsCache.invalidateMerchantCache(merchantId);
-    return (updated.corsOrigins as string[]) ?? [];
+    return (updated.corsOrigins ?? []) as string[];
   }
 }
