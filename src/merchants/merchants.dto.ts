@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsUrl } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsUrl, IsArray, ArrayMinSize } from 'class-validator';
 
 export class RegisterMerchantDto {
   @IsString()
@@ -33,4 +33,10 @@ export class SetWebhookDto {
 export class GenerateApiKeyDto {
   @IsString()
   environment: 'testnet' | 'mainnet';
+}
+
+export class SetCorsOriginsDto {
+  @IsArray()
+  @IsString({ each: true })
+  origins: string[];
 }

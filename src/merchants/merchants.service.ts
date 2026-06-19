@@ -3,9 +3,12 @@ import { db } from '../db/index';
 import { merchants, apiKeys } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { CorsOriginsCacheService } from '../middleware/cors-origins-cache.service';
 
 @Injectable()
 export class MerchantsService {
+  constructor(private readonly corsCache: CorsOriginsCacheService) {}
+
   async register(walletAddress: string, businessName: string, email: string) {
     const existing = await db.query.merchants.findFirst({
       where: eq(merchants.walletAddress, walletAddress),
@@ -90,5 +93,21 @@ export class MerchantsService {
     });
     if (!key || !key.isActive) return null;
     return key.merchantId;
+  }
+
+  async getCorsOrigins(merchantId: string): Promise<string[]> {
+    const merchant = await this.findById(merchantId);
+    return (merchant.corsOrigins as string[]) ?? [];
+  }
+
+  async setCorsOrigins(merchantId: string, origins: string[]): Promise<string[]> {
+    const [updated] = await db
+      .update(merchants)
+      .set({ corsOrigins: origins } as any)
+      .where(eq(merchants.id, merchantId))
+      .returning();
+    if (!updated) throw new NotFoundException('Merchant not found');
+    await this.corsCache.invalidateMerchantCache(merchantId);
+    return (updated.corsOrigins as string[]) ?? [];
   }
 }

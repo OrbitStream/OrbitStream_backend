@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -16,6 +17,7 @@ import {
   UpdateMerchantDto,
   SetWebhookDto,
   GenerateApiKeyDto,
+  SetCorsOriginsDto,
 } from './merchants.dto';
 
 @Controller('merchants')
@@ -75,6 +77,24 @@ export class MerchantsController {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');
       return this.merchants.setWebhook(m.id, dto.webhookUrl);
+    });
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Get('me/cors')
+  getCorsOrigins(@Request() req: any) {
+    return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
+      if (!m) throw new Error('Merchant not found');
+      return this.merchants.getCorsOrigins(m.id);
+    });
+  }
+
+  @UseGuards(AuthGuard('jwt'))
+  @Put('me/cors')
+  setCorsOrigins(@Request() req: any, @Body() dto: SetCorsOriginsDto) {
+    return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
+      if (!m) throw new Error('Merchant not found');
+      return this.merchants.setCorsOrigins(m.id, dto.origins);
     });
   }
 }
