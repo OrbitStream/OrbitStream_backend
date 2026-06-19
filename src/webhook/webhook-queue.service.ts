@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index';
 import { merchants, webhookDeadLetters, webhookDeliveries } from '../db/schema';
 import { RedisService } from '../redis/redis.service';
@@ -82,6 +82,11 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('Webhook worker auto-start disabled');
       return;
     }
+    // Recover any deliveries whose Redis job was lost to a crash before starting
+    // the poll loop (closes the non-transactional DB+Redis enqueue gap).
+    void this.recoverPending().catch((err) =>
+      this.logger.error(`Webhook recovery sweep failed: ${err?.message}`),
+    );
     this.timer = setInterval(() => {
       void this.tick();
     }, this.pollMs);
@@ -137,9 +142,9 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
     const now = Date.now();
 
     // The DB row is the durable record of intent; the Redis job is the work item.
-    // These two writes are not transactional (Redis ≠ Postgres). The deliveryId is
-    // UNIQUE on the DB side so inserts are idempotent, and a future reconciliation
-    // sweep can re-enqueue any 'pending' row that lost its Redis job to a crash.
+    // These two writes are not transactional (Redis ≠ Postgres), but the deliveryId
+    // is UNIQUE so inserts are idempotent, and `recoverPending()` (run on startup)
+    // re-enqueues any 'pending'/'failed' row that lost its Redis job to a crash.
     await db.insert(webhookDeliveries).values({
       merchantId: params.merchantId,
       sessionId: sessionId || null,
@@ -446,5 +451,62 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
       .set({ retriedAt: new Date() } as any)
       .where(eq(webhookDeadLetters.id, deadLetterId));
     return newId;
+  }
+
+  // ── Crash recovery ──────────────────────────────────────────────────────────────
+
+  /**
+   * Reconcile the durable DB log with the Redis queue: any delivery still in a
+   * non-terminal state (`pending`/`failed`) whose Redis job is missing — e.g. the
+   * process crashed between the DB insert and the Redis write — is re-enqueued.
+   * Returns the number of jobs revived. Idempotent and safe to run repeatedly.
+   */
+  async recoverPending(): Promise<number> {
+    const client = this.redis.getClient();
+    const rows = await db.query.webhookDeliveries.findMany({
+      where: inArray(webhookDeliveries.status, ['pending', 'failed']),
+    });
+
+    let revived = 0;
+    for (const row of rows as any[]) {
+      if (await client.exists(this.jobKey(row.deliveryId))) continue;
+      await this.reviveFromRow(row);
+      revived++;
+    }
+    if (revived > 0) this.logger.warn(`Recovered ${revived} orphaned webhook job(s)`);
+    return revived;
+  }
+
+  /** Rebuild a Redis job from a persisted delivery row (reuses its delivery id). */
+  private async reviveFromRow(row: any): Promise<void> {
+    const client = this.redis.getClient();
+    const sessionId: string = row.sessionId ?? '';
+    const timestamp = new Date(row.createdAt ?? Date.now()).toISOString();
+    const data = (row.payload as any)?.data ?? {};
+    const job: QueueJob = {
+      id: row.deliveryId,
+      merchantId: row.merchantId,
+      sessionId,
+      event: row.event,
+      priority: row.priority ?? priorityFor(row.event),
+      sequence: row.sequence ?? 0,
+      payload: JSON.stringify({ event: row.event, data, timestamp }),
+      deliveryId: row.deliveryId,
+      timestamp,
+      attempt: row.attempts ?? 0,
+      availableAt: Date.now(),
+    };
+
+    await this.writeJob(job);
+    if (sessionId) {
+      await client.zadd(this.sessionKey(sessionId), String(job.sequence), job.id);
+      await client.expire(this.sessionKey(sessionId), WEBHOOK_KEY_TTL_S);
+      // Keep the session's sequence counter ahead of any revived job.
+      const cur = await client.get(this.seqKey(sessionId));
+      if (!cur || Number(cur) < job.sequence) {
+        await client.set(this.seqKey(sessionId), String(job.sequence), 'EX', WEBHOOK_KEY_TTL_S);
+      }
+    }
+    await client.zadd(this.scheduledKey(), String(job.availableAt), job.id);
   }
 }

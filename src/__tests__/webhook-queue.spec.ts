@@ -4,6 +4,7 @@ jest.mock('drizzle-orm', () => ({
   and: (...conds: any[]) => ({ op: 'and', conds }),
   desc: (col: string) => ({ op: 'desc', col }),
   lte: (col: string, val: any) => ({ op: 'lte', col, val }),
+  inArray: (col: string, vals: any[]) => ({ op: 'inArray', col, vals }),
 }));
 
 jest.mock('../db/schema', () => ({
@@ -316,6 +317,42 @@ describe('WebhookQueueService', () => {
       const dlId = store().deadLetters[0].id;
       const result = await svc.requeueDeadLetter('someone-else', dlId);
       expect(result).toBeNull();
+    });
+  });
+
+  describe('crash recovery (recoverPending)', () => {
+    it('re-enqueues a persisted delivery whose Redis job was lost', async () => {
+      // Simulate a crash after the DB insert but before the Redis write: a
+      // 'pending' row exists with no corresponding job in Redis.
+      store().deliveries.push({
+        id: 'deliveries-1',
+        deliveryId: '99999999-9999-4999-8999-999999999999',
+        merchantId: MERCHANT.id,
+        sessionId: null,
+        event: 'payment.confirmed',
+        payload: { event: 'payment.confirmed', data: { n: 1 } },
+        sequence: 0,
+        priority: 1,
+        status: 'pending',
+        attempts: 0,
+        attemptLog: [],
+        createdAt: new Date(),
+      });
+
+      const revived = await svc.recoverPending();
+      expect(revived).toBe(1);
+
+      await drain(svc, Date.now());
+
+      expect(delivery.deliver).toHaveBeenCalledTimes(1);
+      expect(delivery.calls[0].deliveryId).toBe('99999999-9999-4999-8999-999999999999');
+      expect(store().deliveries[0].status).toBe('delivered');
+    });
+
+    it('does not re-enqueue a delivery that still has its Redis job', async () => {
+      await svc.enqueue({ merchantId: MERCHANT.id, event: 'payment.confirmed', body: {} });
+      const revived = await svc.recoverPending();
+      expect(revived).toBe(0);
     });
   });
 

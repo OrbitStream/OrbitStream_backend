@@ -114,7 +114,11 @@ export const webhookDeadLetters = pgTable('webhook_dead_letters', {
     .notNull()
     .references(() => merchants.id),
   deliveryId: uuid('delivery_id').notNull().unique(),
-  sessionId: uuid('session_id'),
+  // References the session but uses ON DELETE SET NULL: a dead-letter row is a
+  // retained audit/recovery record that must outlive a cascade-deleted session.
+  sessionId: uuid('session_id').references(() => checkoutSessions.id, {
+    onDelete: 'set null',
+  }),
   event: text('event').notNull(),
   payload: jsonb('payload').notNull(),
   // All delivery attempts with timestamps and error messages.
