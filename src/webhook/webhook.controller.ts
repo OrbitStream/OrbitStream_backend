@@ -32,7 +32,14 @@ export class WebhookController {
   @Get('deliveries')
   async listDeliveries(@Request() req: any, @Query('limit') limit?: string) {
     const merchantId = await this.merchantId(req);
-    return this.webhooks.listDeliveries(merchantId, limit ? Number(limit) : 50);
+    return this.webhooks.listDeliveries(merchantId, this.clampLimit(limit));
+  }
+
+  /** Bound a client-supplied limit to a sane [1, 100] range (default 50). */
+  private clampLimit(limit?: string): number {
+    const n = Number(limit);
+    if (!Number.isFinite(n) || n <= 0) return 50;
+    return Math.min(Math.floor(n), 100);
   }
 
   /** List dead-letter entries for the authenticated merchant. */

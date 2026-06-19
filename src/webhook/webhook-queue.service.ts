@@ -5,7 +5,13 @@ import { db } from '../db/index';
 import { merchants, webhookDeadLetters, webhookDeliveries } from '../db/schema';
 import { RedisService } from '../redis/redis.service';
 import { WebhookDeliveryService } from './webhook-delivery.service';
-import { backoffDelayMs, MAX_ATTEMPTS, priorityFor, WEBHOOK_NS } from './webhook.constants';
+import {
+  backoffDelayMs,
+  MAX_ATTEMPTS,
+  priorityFor,
+  WEBHOOK_KEY_TTL_S,
+  WEBHOOK_NS,
+} from './webhook.constants';
 
 export interface EnqueueParams {
   merchantId: string;
@@ -123,9 +129,17 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
     });
 
     // Per-session monotonic sequence (0 when the event has no session).
-    const sequence = sessionId ? await client.incr(this.seqKey(sessionId)) : 0;
+    let sequence = 0;
+    if (sessionId) {
+      sequence = await client.incr(this.seqKey(sessionId));
+      await client.expire(this.seqKey(sessionId), WEBHOOK_KEY_TTL_S);
+    }
     const now = Date.now();
 
+    // The DB row is the durable record of intent; the Redis job is the work item.
+    // These two writes are not transactional (Redis ≠ Postgres). The deliveryId is
+    // UNIQUE on the DB side so inserts are idempotent, and a future reconciliation
+    // sweep can re-enqueue any 'pending' row that lost its Redis job to a crash.
     await db.insert(webhookDeliveries).values({
       merchantId: params.merchantId,
       sessionId: sessionId || null,
@@ -154,10 +168,13 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
     };
 
     await this.writeJob(job);
-    await client.zadd(this.scheduledKey(), String(now), job.id);
     if (sessionId) {
       await client.zadd(this.sessionKey(sessionId), String(sequence), job.id);
+      await client.expire(this.sessionKey(sessionId), WEBHOOK_KEY_TTL_S);
     }
+    // Added last: this is the dispatch trigger, so the job is only ever made
+    // runnable once its hash and session-ordering entry are both in place.
+    await client.zadd(this.scheduledKey(), String(now), job.id);
 
     this.logger.log(
       `Enqueued ${params.event} (delivery=${deliveryId}, priority=${priority}` +
@@ -167,7 +184,8 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async writeJob(job: QueueJob): Promise<void> {
-    await this.redis.getClient().hset(this.jobKey(job.id), {
+    const client = this.redis.getClient();
+    await client.hset(this.jobKey(job.id), {
       id: job.id,
       merchantId: job.merchantId,
       sessionId: job.sessionId,
@@ -180,6 +198,9 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
       attempt: String(job.attempt),
       availableAt: String(job.availableAt),
     });
+    // TTL is refreshed on every write (initial enqueue + each retry) so a job in
+    // its normal lifecycle never expires, but a hash orphaned by a crash does.
+    await client.expire(this.jobKey(job.id), WEBHOOK_KEY_TTL_S);
   }
 
   private async readJob(jobId: string): Promise<QueueJob | null> {

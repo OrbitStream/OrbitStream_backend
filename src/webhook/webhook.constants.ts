@@ -14,6 +14,14 @@ export const DELIVERY_TIMEOUT_MS = 10_000;
 export const MAX_ATTEMPTS = 5;
 
 /**
+ * TTL applied to every Redis queue key (job hashes, per-session zsets, sequence
+ * counters). Comfortably exceeds the full retry lifecycle (~1m+5m+30m+2h+12h ≈
+ * 14.6h) so live jobs are never reaped, while orphaned keys from a crash mid-
+ * `process()` are reclaimed automatically instead of leaking forever.
+ */
+export const WEBHOOK_KEY_TTL_S = 48 * 60 * 60; // 48 hours
+
+/**
  * Retry backoff schedule (milliseconds), one entry per failed attempt:
  *   attempt 1 → 1min, 2 → 5min, 3 → 30min, 4 → 2hr, 5 → 12hr.
  * The final value acts as the steady-state cap.
