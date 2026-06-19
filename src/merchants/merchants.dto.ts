@@ -37,6 +37,6 @@ export class GenerateApiKeyDto {
 
 export class SetCorsOriginsDto {
   @IsArray()
-  @IsString({ each: true })
+  @IsUrl({}, { each: true })
   origins: string[];
 }

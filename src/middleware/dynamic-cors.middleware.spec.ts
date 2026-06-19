@@ -155,7 +155,7 @@ describe('DynamicCorsMiddleware - route grouping', () => {
       'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     );
     expect(res._headers['Access-Control-Allow-Headers']).toBe(
-      'Content-Type,Authorization,X-Requested-With',
+      'Content-Type,Authorization,X-Requested-With,X-Request-Id,X-Idempotency-Key',
     );
     expect(res._headers['Access-Control-Allow-Credentials']).toBe('true');
   });

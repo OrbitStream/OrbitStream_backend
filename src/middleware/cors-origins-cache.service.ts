@@ -93,14 +93,18 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
 
   async invalidateMerchantCache(merchantId: string): Promise<void> {
     await this.redis.getClient().del(`${CORS_CACHE_KEY}:${merchantId}`);
-    const merchant = await db.query.merchants.findFirst({
-      where: eq(merchants.id, merchantId),
-      columns: { corsOrigins: true },
-    });
-    const origins = (merchant?.corsOrigins ?? []) as string[];
-    await this.redis
-      .getClient()
-      .set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
+    try {
+      const merchant = await db.query.merchants.findFirst({
+        where: eq(merchants.id, merchantId),
+        columns: { corsOrigins: true },
+      });
+      const origins = (merchant?.corsOrigins ?? []) as string[];
+      await this.redis
+        .getClient()
+        .set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
+    } catch (err) {
+      this.logger.error(`Failed to repopulate cache for merchant ${merchantId}`, err);
+    }
   }
 
   invalidateAllCache(): void {
