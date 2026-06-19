@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { RequestChallengeDto, VerifyChallengeDto } from './auth.dto';
-import { RedisService } from './redis.service';
+import { RedisService } from '../redis/redis.service';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import axios from 'axios';
@@ -44,24 +44,18 @@ export class AuthService {
     };
   }
 
+  private cachedServerKeypair: StellarSdk.Keypair | null = null;
+
   private getServerKeypair(): StellarSdk.Keypair {
+    if (this.cachedServerKeypair) {
+      return this.cachedServerKeypair;
+    }
     const config = this.getNetworkConfig();
     if (!config.secret) {
       throw new BadRequestException('Auth server secret key not configured for the active network');
     }
-    return StellarSdk.Keypair.fromSecret(config.secret);
-  }
-
-  private async checkRateLimit(walletAddress: string): Promise<void> {
-    const redis = this.redisService.getClient();
-    const key = `rate_limit:verify:${walletAddress}`;
-    const attempts = await redis.incr(key);
-    if (attempts === 1) {
-      await redis.expire(key, 60);
-    }
-    if (attempts > 10) {
-      throw new UnauthorizedException('Too many failed verification attempts. Try again later.');
-    }
+    this.cachedServerKeypair = StellarSdk.Keypair.fromSecret(config.secret);
+    return this.cachedServerKeypair;
   }
 
   private async fetchAccountSignersWithResilience(accountId: string, horizonUrl: string) {
@@ -129,7 +123,7 @@ export class AuthService {
     const serverKeypair = this.getServerKeypair();
     const serverAccountId = serverKeypair.publicKey();
 
-    const nonce = crypto.randomBytes(Math.max(NONCE_BYTES, 32)).toString('hex');
+    const nonce = crypto.randomBytes(NONCE_BYTES).toString('hex');
 
     // We mock the sequence number for the challenge transaction. Standard SEP-10 uses "0".
     const serverAccount = new StellarSdk.Account(serverAccountId, '0');
@@ -159,9 +153,7 @@ export class AuthService {
     const txEnvelope = transaction.toEnvelope().toXDR('base64');
 
     const redis = this.redisService.getClient();
-    await redis.set(`challenge:${walletAddress}`, nonce, {
-      EX: CHALLENGE_TTL_SECONDS,
-    });
+    await redis.set(`challenge:${walletAddress}`, nonce, 'EX', CHALLENGE_TTL_SECONDS);
 
     return {
       transaction: txEnvelope,
@@ -171,12 +163,31 @@ export class AuthService {
   }
 
   async verifyChallenge(dto: VerifyChallengeDto) {
-    const { walletAddress, transaction: txData } = dto;
-
-    // Increment rate limit before doing anything
-    await this.checkRateLimit(walletAddress);
-
+    const { walletAddress } = dto;
     const redis = this.redisService.getClient();
+    const rateLimitKey = `rate_limit:verify:${walletAddress}`;
+
+    const attemptsStr = await redis.get(rateLimitKey);
+    const attempts = attemptsStr ? parseInt(attemptsStr, 10) : 0;
+    if (attempts >= 10) {
+      throw new UnauthorizedException('Too many failed verification attempts. Try again later.');
+    }
+
+    try {
+      return await this.verifyChallengeCore(dto, redis);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        const newAttempts = await redis.incr(rateLimitKey);
+        if (newAttempts === 1) {
+          await redis.expire(rateLimitKey, 60);
+        }
+      }
+      throw error;
+    }
+  }
+
+  private async verifyChallengeCore(dto: VerifyChallengeDto, redis: any) {
+    const { walletAddress, transaction: txData } = dto;
     const storedNonce = await redis.get(`challenge:${walletAddress}`);
 
     if (!storedNonce) {
