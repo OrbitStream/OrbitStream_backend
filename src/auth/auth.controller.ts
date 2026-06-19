@@ -1,4 +1,5 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
 import { WalletLoginDto, RequestChallengeDto, VerifyChallengeDto } from './auth.dto';
 
@@ -22,5 +23,16 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: WalletLoginDto) {
     return this.auth.walletLogin(dto);
+  }
+
+  /**
+   * Exchange a valid (possibly previous-secret) token for a token signed with the
+   * current secret. Enables zero-downtime JWT secret rotation.
+   */
+  @UseGuards(AuthGuard('jwt'))
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  refresh(@Request() req: any) {
+    return this.auth.refresh(req.user);
   }
 }

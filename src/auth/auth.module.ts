@@ -4,13 +4,21 @@ import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './jwt.strategy';
+import { resolveJwtSecrets, jwtExpiresIn } from '../config/jwt-secret.config';
 
 @Module({
   imports: [
     PassportModule,
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev-secret',
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN ?? '7d' },
+    JwtModule.registerAsync({
+      // Resolve the secret lazily so validation runs against the live env and any
+      // misconfiguration surfaces during module init rather than at import time.
+      useFactory: () => {
+        const { current } = resolveJwtSecrets();
+        return {
+          secret: current,
+          signOptions: { expiresIn: jwtExpiresIn() },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

@@ -301,4 +301,23 @@ export class AuthService {
     const payload = { sub: walletAddress, walletAddress, authMethod: 'wallet' };
     return { access_token: this.jwt.sign(payload), wallet: walletAddress };
   }
+
+  /**
+   * Re-issue a token signed with the CURRENT secret. Used during secret rotation:
+   * a client whose token only verified against `JWT_SECRET_PREVIOUS` can exchange
+   * it for a fresh token without repeating the full challenge flow. `JwtService`
+   * is configured with the current secret, so the new token is always current.
+   */
+  async refresh(user: { walletAddress: string; viaPreviousSecret?: boolean }) {
+    const { walletAddress } = user;
+    if (user.viaPreviousSecret) {
+      this.logger.log(`Re-issuing token under current secret for ${walletAddress} (rotation)`);
+    }
+    const payload = { sub: walletAddress, walletAddress, authMethod: 'refresh' };
+    return {
+      access_token: this.jwt.sign(payload),
+      wallet: walletAddress,
+      rotated: user.viaPreviousSecret === true,
+    };
+  }
 }

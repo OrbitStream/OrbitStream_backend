@@ -8,6 +8,7 @@ import { StellarModule } from './stellar/stellar.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { RedisModule } from './redis/redis.module';
+import { RateLimitModule } from './api/middleware/rate-limit.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RedisModule } from './redis/redis.module';
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     RedisModule,
+    RateLimitModule,
     AuthModule,
     MerchantsModule,
     CheckoutModule,
