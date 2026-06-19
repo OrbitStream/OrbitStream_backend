@@ -84,6 +84,13 @@ export const payments = pgTable('payments', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export interface WebhookDeliveryAttempt {
+  attempt: number;
+  timestamp: string;
+  status: number | null;
+  error: string | null;
+}
+
 export const webhookDeliveries = pgTable('webhook_deliveries', {
   id: uuid('id').defaultRandom().primaryKey(),
   merchantId: uuid('merchant_id')

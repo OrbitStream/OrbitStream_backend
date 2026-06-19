@@ -36,12 +36,7 @@ interface QueueJob {
   availableAt: number; // epoch ms
 }
 
-interface AttemptLogEntry {
-  attempt: number;
-  timestamp: string;
-  status: number | null;
-  error: string | null;
-}
+type AttemptLogEntry = import('../db/schema').WebhookDeliveryAttempt;
 
 /**
  * Redis-backed webhook delivery queue with priority scheduling, exponential
@@ -394,8 +389,8 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
       deliveryId: job.deliveryId,
       sessionId: job.sessionId || null,
       event: job.event,
-      payload: row?.payload ?? { event: job.event },
-      attempts: (row?.attemptLog as any) ?? [lastEntry],
+      payload: row?.payload ?? { event: job.event, data: {} },
+      attempts: (row?.attemptLog as AttemptLogEntry[]) ?? [lastEntry],
       reason,
     } as any);
     await this.cleanup(job);
@@ -439,11 +434,11 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
     });
     if (!dead || dead.merchantId !== merchantId) return null;
 
-    const payload = dead.payload as { data?: Record<string, any> };
+    const payload = dead.payload as { data?: Record<string, unknown> };
     const newId = await this.enqueue({
       merchantId,
       event: dead.event,
-      body: payload?.data ?? {},
+      body: (payload?.data ?? {}) as Record<string, any>,
       sessionId: dead.sessionId,
     });
     await db
@@ -468,7 +463,7 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
     });
 
     let revived = 0;
-    for (const row of rows as any[]) {
+    for (const row of rows) {
       if (await client.exists(this.jobKey(row.deliveryId))) continue;
       await this.reviveFromRow(row);
       revived++;
@@ -478,11 +473,11 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Rebuild a Redis job from a persisted delivery row (reuses its delivery id). */
-  private async reviveFromRow(row: any): Promise<void> {
+  private async reviveFromRow(row: typeof webhookDeliveries.$inferSelect): Promise<void> {
     const client = this.redis.getClient();
     const sessionId: string = row.sessionId ?? '';
     const timestamp = new Date(row.createdAt ?? Date.now()).toISOString();
-    const data = (row.payload as any)?.data ?? {};
+    const data = (row.payload as { data?: Record<string, unknown> })?.data ?? {};
     const job: QueueJob = {
       id: row.deliveryId,
       merchantId: row.merchantId,
