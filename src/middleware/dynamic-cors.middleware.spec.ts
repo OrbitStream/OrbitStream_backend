@@ -9,10 +9,20 @@ function mockReqRes(path: string, method: string, origin?: string) {
     _headers: {} as Record<string, string>,
     _status: 200,
     _body: null,
-    setHeader(k: string, v: string) { this._headers[k] = v; },
-    status(s: number) { this._status = s; return this; },
-    json(b: any) { this._body = b; return this; },
-    end() { return this; },
+    setHeader(k: string, v: string) {
+      this._headers[k] = v;
+    },
+    status(s: number) {
+      this._status = s;
+      return this;
+    },
+    json(b: any) {
+      this._body = b;
+      return this;
+    },
+    end() {
+      return this;
+    },
   } as any;
   const next = jest.fn();
   return { req, res, next };
@@ -35,7 +45,11 @@ describe('DynamicCorsMiddleware - route grouping', () => {
   });
 
   it('allows all origins on public GET /v1/checkout/sessions/:id', async () => {
-    const { req, res, next } = mockReqRes('/v1/checkout/sessions/abc-123', 'GET', 'https://evil.com');
+    const { req, res, next } = mockReqRes(
+      '/v1/checkout/sessions/abc-123',
+      'GET',
+      'https://evil.com',
+    );
     await middleware.use(req, res, next);
     expect(res._headers['Access-Control-Allow-Origin']).toBe('https://evil.com');
     expect(next).toHaveBeenCalled();
@@ -137,8 +151,12 @@ describe('DynamicCorsMiddleware - route grouping', () => {
     const { req, res, next } = mockReqRes('/v1/checkout/sessions', 'POST', 'https://myshop.com');
     cache.getAllMerchantOrigins.mockResolvedValue(['https://myshop.com']);
     await middleware.use(req, res, next);
-    expect(res._headers['Access-Control-Allow-Methods']).toBe('GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
-    expect(res._headers['Access-Control-Allow-Headers']).toBe('Content-Type,Authorization,X-Requested-With');
+    expect(res._headers['Access-Control-Allow-Methods']).toBe(
+      'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    );
+    expect(res._headers['Access-Control-Allow-Headers']).toBe(
+      'Content-Type,Authorization,X-Requested-With',
+    );
     expect(res._headers['Access-Control-Allow-Credentials']).toBe('true');
   });
 });

@@ -21,7 +21,7 @@ function getRouteGroup(path: string, method: string): RouteGroup {
 
 function originMatches(origin: string, allowed: string[]): boolean {
   return allowed.some(
-    (a) => a === origin || a === '*' || a.endsWith('/*') && origin.startsWith(a.slice(0, -1)),
+    (a) => a === origin || a === '*' || (a.endsWith('/*') && origin.startsWith(a.slice(0, -1))),
   );
 }
 

@@ -1,8 +1,9 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
 
-const CSP_VALUE = process.env.CONTENT_SECURITY_POLICY
-  ?? "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'";
+const CSP_VALUE =
+  process.env.CONTENT_SECURITY_POLICY ??
+  "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'";
 
 @Injectable()
 export class SecurityHeadersMiddleware implements NestMiddleware {

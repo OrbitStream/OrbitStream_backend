@@ -5,7 +5,9 @@ function mockReqRes() {
   const req = { headers: {} } as any;
   const res = {
     _headers: headers,
-    setHeader(k: string, v: string) { headers[k] = v; },
+    setHeader(k: string, v: string) {
+      headers[k] = v;
+    },
   } as any;
   const next = jest.fn();
   return { req, res, next };

@@ -1,4 +1,4 @@
-import { IsString, IsEmail, IsOptional, IsUrl, IsArray, ArrayMinSize } from 'class-validator';
+import { IsString, IsEmail, IsOptional, IsUrl, IsArray } from 'class-validator';
 
 export class RegisterMerchantDto {
   @IsString()

@@ -31,12 +31,8 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer
-      .apply(SecurityHeadersMiddleware)
-      .forRoutes('*');
+    consumer.apply(SecurityHeadersMiddleware).forRoutes('*');
 
-    consumer
-      .apply(DynamicCorsMiddleware)
-      .forRoutes('*');
+    consumer.apply(DynamicCorsMiddleware).forRoutes('*');
   }
 }

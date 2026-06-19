@@ -64,7 +64,9 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
       columns: { corsOrigins: true },
     });
     const origins: string[] = (merchant?.corsOrigins as string[]) ?? [];
-    await this.redis.getClient().set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
+    await this.redis
+      .getClient()
+      .set(`${CORS_CACHE_KEY}:${merchantId}`, JSON.stringify(origins), 'PX', CACHE_TTL_MS);
     return origins;
   }
 
@@ -83,7 +85,9 @@ export class CorsOriginsCacheService implements OnModuleInit, OnModuleDestroy {
       for (const origin of o) origins.add(origin);
     }
     const result = [...origins];
-    await this.redis.getClient().set(ALL_MERCHANT_ORIGINS_KEY, JSON.stringify(result), 'PX', CACHE_TTL_MS);
+    await this.redis
+      .getClient()
+      .set(ALL_MERCHANT_ORIGINS_KEY, JSON.stringify(result), 'PX', CACHE_TTL_MS);
     return result;
   }
 

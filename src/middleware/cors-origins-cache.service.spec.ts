@@ -24,7 +24,10 @@ describe('CorsOriginsCacheService', () => {
   beforeEach(async () => {
     redis = {
       getClient: jest.fn().mockReturnValue({
-        pipeline: jest.fn().mockReturnValue({ set: jest.fn().mockReturnThis(), exec: jest.fn().mockResolvedValue([]) }),
+        pipeline: jest.fn().mockReturnValue({
+          set: jest.fn().mockReturnThis(),
+          exec: jest.fn().mockResolvedValue([]),
+        }),
         get: jest.fn().mockResolvedValue(null),
         set: jest.fn().mockResolvedValue('OK'),
         del: jest.fn().mockResolvedValue(1),
@@ -32,10 +35,7 @@ describe('CorsOriginsCacheService', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CorsOriginsCacheService,
-        { provide: RedisService, useValue: redis },
-      ],
+      providers: [CorsOriginsCacheService, { provide: RedisService, useValue: redis }],
     }).compile();
 
     service = module.get<CorsOriginsCacheService>(CorsOriginsCacheService);
