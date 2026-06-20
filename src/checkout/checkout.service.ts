@@ -3,11 +3,14 @@ import { db } from '../db/index';
 import { checkoutSessions } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as crypto from 'crypto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class CheckoutService {
   private readonly frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
   private readonly sessionTtlMinutes = Number(process.env.CHECKOUT_SESSION_TTL_MINUTES ?? 30);
+
+  constructor(private readonly auditService: AuditService) {}
 
   async createSession(
     merchantId: string,
@@ -68,10 +71,21 @@ export class CheckoutService {
         .update(checkoutSessions)
         .set({ status: 'expired' } as any)
         .where(eq(checkoutSessions.id, sessionId));
-      return { ...session, status: 'expired' as const };
+      return { ...this.toPublicSession(session), status: 'expired' as const };
     }
 
-    return session;
+    return this.toPublicSession(session);
+  }
+
+  toPublicSession(session: any) {
+    return {
+      id: session.id,
+      url: `${this.frontendUrl}/checkout/${session.id}`,
+      amount: session.amount,
+      asset: session.assetCode,
+      status: session.status,
+      expiresAt: session.expiresAt,
+    };
   }
 
   async cancelSession(sessionId: string, merchantId: string) {
@@ -88,6 +102,13 @@ export class CheckoutService {
       .set({ status: 'cancelled' } as any)
       .where(eq(checkoutSessions.id, sessionId))
       .returning();
+
+    await this.auditService.logSensitiveOperation({
+      merchantId,
+      action: 'session_cancelled',
+      resourceType: 'checkout_session',
+      resourceId: sessionId,
+    });
 
     return updated;
   }

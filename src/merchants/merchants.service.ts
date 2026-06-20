@@ -4,10 +4,14 @@ import { merchants, apiKeys } from '../db/schema';
 import { eq } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { CorsOriginsCacheService } from '../middleware/cors-origins-cache.service';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class MerchantsService {
-  constructor(private readonly corsCache: CorsOriginsCacheService) {}
+  constructor(
+    private readonly corsCache: CorsOriginsCacheService,
+    private readonly auditService: AuditService,
+  ) {}
 
   async register(walletAddress: string, businessName: string, email: string) {
     const existing = await db.query.merchants.findFirst({
@@ -19,6 +23,14 @@ export class MerchantsService {
       .insert(merchants)
       .values({ walletAddress, businessName, email })
       .returning();
+
+    await this.auditService.logSensitiveOperation({
+      merchantId: merchant.id,
+      action: 'merchant_registered',
+      resourceType: 'merchant',
+      resourceId: merchant.id,
+    });
+
     return merchant;
   }
 
@@ -47,12 +59,22 @@ export class MerchantsService {
     const keyPrefix = rawKey.slice(0, 12) + '...';
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-    await db.insert(apiKeys).values({
+    const [apiKey] = await db
+      .insert(apiKeys)
+      .values({
+        merchantId,
+        keyPrefix,
+        keyHash,
+        environment,
+      } as any)
+      .returning();
+
+    await this.auditService.logSensitiveOperation({
       merchantId,
-      keyPrefix,
-      keyHash,
-      environment,
-    } as any);
+      action: 'api_key_generated',
+      resourceType: 'api_key',
+      resourceId: apiKey.id,
+    });
 
     return { key: rawKey, keyPrefix };
   }
@@ -73,6 +95,14 @@ export class MerchantsService {
     if (!key || key.merchantId !== merchantId) {
       throw new NotFoundException('API key not found');
     }
+
+    await this.auditService.logSensitiveOperation({
+      merchantId,
+      action: 'api_key_revoked',
+      resourceType: 'api_key',
+      resourceId: keyId,
+    });
+
     return { revoked: true };
   }
 
@@ -83,6 +113,14 @@ export class MerchantsService {
       .set({ webhookUrl, webhookSecret } as any)
       .where(eq(merchants.id, merchantId))
       .returning();
+
+    await this.auditService.logSensitiveOperation({
+      merchantId,
+      action: 'webhook_updated',
+      resourceType: 'merchant',
+      resourceId: merchantId,
+    });
+
     return { webhookUrl: updated.webhookUrl, webhookSecret };
   }
 

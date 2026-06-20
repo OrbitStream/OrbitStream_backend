@@ -3,6 +3,14 @@ import { WebhookModule } from '../webhook/webhook.module';
 import { RedisModule } from '../redis/redis.module';
 import { RedisService } from '../redis/redis.service';
 import { WebhookQueueService } from '../webhook/webhook-queue.service';
+import { AuditService } from '../audit/audit.service';
+
+const mockAuditService = {
+  log: jest.fn(),
+  logAuthFailure: jest.fn(),
+  logAccessDenied: jest.fn(),
+  logSensitiveOperation: jest.fn(),
+};
 
 /**
  * Resolves the real WebhookModule DI graph (no manual provider overrides) to
@@ -14,7 +22,10 @@ describe('WebhookModule dependency injection', () => {
   it('resolves WebhookQueueService with RedisService injected', async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [WebhookModule],
-    }).compile();
+    })
+      .overrideProvider(AuditService)
+      .useValue(mockAuditService)
+      .compile();
 
     const queue = moduleRef.get(WebhookQueueService);
     expect(queue).toBeInstanceOf(WebhookQueueService);

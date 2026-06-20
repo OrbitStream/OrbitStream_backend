@@ -19,24 +19,27 @@ import {
   GenerateApiKeyDto,
   SetCorsOriginsDto,
 } from './merchants.dto';
+import { ResourceOwnershipGuard, ResourceOwner } from '../auth/resource-ownership.guard';
+import { RolesGuard, Roles } from '../auth/roles.guard';
 
 @Controller('merchants')
+@UseGuards(AuthGuard('jwt'), RolesGuard)
 export class MerchantsController {
   constructor(private readonly merchants: MerchantsService) {}
 
   @Post('register')
+  @UseGuards()
   register(@Body() dto: RegisterMerchantDto) {
     return this.merchants.register(dto.walletAddress, dto.businessName, dto.email);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('me')
   getProfile(@Request() req: any) {
     return this.merchants.findByWallet(req.user.walletAddress);
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Patch('me')
+  @Roles('admin', 'merchant')
   updateProfile(@Request() req: any, @Body() dto: UpdateMerchantDto) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');
@@ -44,8 +47,8 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post('me/api-keys')
+  @Roles('admin', 'merchant')
   generateApiKey(@Request() req: any, @Body() dto: GenerateApiKeyDto) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');
@@ -53,7 +56,6 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('me/api-keys')
   listApiKeys(@Request() req: any) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
@@ -62,8 +64,10 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Delete('me/api-keys/:id')
+  @Roles('admin', 'merchant')
+  @UseGuards(ResourceOwnershipGuard)
+  @ResourceOwner('api_key')
   revokeApiKey(@Request() req: any, @Param('id') keyId: string) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');
@@ -71,8 +75,8 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Patch('me/webhook')
+  @Roles('admin', 'merchant')
   setWebhook(@Request() req: any, @Body() dto: SetWebhookDto) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');
@@ -80,7 +84,6 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Get('me/cors')
   getCorsOrigins(@Request() req: any) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
@@ -89,8 +92,8 @@ export class MerchantsController {
     });
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Put('me/cors')
+  @Roles('admin', 'merchant')
   setCorsOrigins(@Request() req: any, @Body() dto: SetCorsOriginsDto) {
     return this.merchants.findByWallet(req.user.walletAddress).then((m) => {
       if (!m) throw new Error('Merchant not found');

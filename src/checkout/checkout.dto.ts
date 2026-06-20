@@ -1,8 +1,9 @@
-import { IsString, IsNumber, IsOptional, IsObject, Min } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsObject, Min, Max } from 'class-validator';
 
 export class CreateSessionDto {
   @IsNumber()
   @Min(0.0000001)
+  @Max(1000000)
   amount: number;
 
   @IsString()
@@ -23,4 +24,13 @@ export class CreateSessionDto {
   @IsObject()
   @IsOptional()
   metadata?: Record<string, unknown>;
+}
+
+export class PublicSessionDto {
+  id: string;
+  url: string;
+  amount: string;
+  asset: string;
+  status: string;
+  expiresAt: Date;
 }
