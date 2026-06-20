@@ -36,7 +36,12 @@ describe('ResourceOwnershipGuard', () => {
 
   beforeEach(() => {
     reflector = new Reflector();
-    auditService = { log: jest.fn(), logAuthFailure: jest.fn(), logAccessDenied: jest.fn(), logSensitiveOperation: jest.fn() } as any;
+    auditService = {
+      log: jest.fn(),
+      logAuthFailure: jest.fn(),
+      logAccessDenied: jest.fn(),
+      logSensitiveOperation: jest.fn(),
+    } as any;
     guard = new ResourceOwnershipGuard(reflector, auditService);
     jest.clearAllMocks();
   });
@@ -84,7 +89,9 @@ describe('ResourceOwnershipGuard', () => {
 
   it('should check checkout_session ownership', async () => {
     jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue('checkout_session');
-    (db.query.checkoutSessions.findFirst as jest.Mock).mockResolvedValue({ merchantId: 'merchant-1' });
+    (db.query.checkoutSessions.findFirst as jest.Mock).mockResolvedValue({
+      merchantId: 'merchant-1',
+    });
 
     const result = await guard.canActivate(mockContext({ id: 'sess-1' }, 'merchant-1'));
     expect(result).toBe(true);

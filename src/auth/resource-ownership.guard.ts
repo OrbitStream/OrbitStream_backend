@@ -17,7 +17,10 @@ export const ResourceOwner = (resourceType: string) =>
 
 type ResourceType = 'api_key' | 'checkout_session' | 'merchant';
 
-async function resolveOwnerId(resourceType: ResourceType, resourceId: string): Promise<string | null> {
+async function resolveOwnerId(
+  resourceType: ResourceType,
+  resourceId: string,
+): Promise<string | null> {
   switch (resourceType) {
     case 'api_key': {
       const key = await db.query.apiKeys.findFirst({

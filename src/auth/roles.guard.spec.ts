@@ -34,7 +34,12 @@ describe('RolesGuard', () => {
 
   beforeEach(() => {
     reflector = new Reflector();
-    auditService = { log: jest.fn(), logAuthFailure: jest.fn(), logAccessDenied: jest.fn(), logSensitiveOperation: jest.fn() } as any;
+    auditService = {
+      log: jest.fn(),
+      logAuthFailure: jest.fn(),
+      logAccessDenied: jest.fn(),
+      logSensitiveOperation: jest.fn(),
+    } as any;
     guard = new RolesGuard(reflector, auditService);
     jest.clearAllMocks();
   });
