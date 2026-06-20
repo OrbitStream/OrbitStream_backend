@@ -2,8 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomUUID } from 'crypto';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
-import { and, eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';

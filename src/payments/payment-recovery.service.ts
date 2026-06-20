@@ -2,8 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
-import { and, eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 
