@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { CheckoutService } from './checkout.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -17,7 +17,6 @@ import { db } from '../db/index';
 
 describe('CheckoutService', () => {
   let service: CheckoutService;
-  let auditService: AuditService;
 
   const mockAuditService = {
     log: jest.fn(),
@@ -29,17 +28,14 @@ describe('CheckoutService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     process.env.FRONTEND_URL = 'https://checkout.example.com';
-    process.env.PLATFORM_RECEIVING_ACCOUNT = 'GTESTACCOUNT123456789012345678901234567890123456789012345';
+    process.env.PLATFORM_RECEIVING_ACCOUNT =
+      'GTESTACCOUNT123456789012345678901234567890123456789012345';
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CheckoutService,
-        { provide: AuditService, useValue: mockAuditService },
-      ],
+      providers: [CheckoutService, { provide: AuditService, useValue: mockAuditService }],
     }).compile();
 
     service = module.get<CheckoutService>(CheckoutService);
-    auditService = module.get<AuditService>(AuditService);
   });
 
   describe('toPublicSession', () => {

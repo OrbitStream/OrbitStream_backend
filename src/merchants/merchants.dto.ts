@@ -44,7 +44,6 @@ export class SetWebhookDto {
   @ValidateIf(() => process.env.NODE_ENV === 'production')
   @Matches(/^https:\/\//, {
     message: 'Webhook URL must use HTTPS in production',
-    groups: ['production'],
   })
   webhookUrl: string;
 }

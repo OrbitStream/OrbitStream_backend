@@ -19,7 +19,6 @@ import { db } from '../db/index';
 
 describe('MerchantsService', () => {
   let service: MerchantsService;
-  let auditService: AuditService;
 
   const mockCorsCache = { invalidateMerchantCache: jest.fn() };
   const mockAuditService = {
@@ -41,7 +40,6 @@ describe('MerchantsService', () => {
     }).compile();
 
     service = module.get<MerchantsService>(MerchantsService);
-    auditService = module.get<AuditService>(AuditService);
   });
 
   describe('register', () => {
@@ -129,7 +127,11 @@ describe('MerchantsService', () => {
       (db.update as jest.Mock).mockReturnValue({
         set: jest.fn().mockReturnValue({
           where: jest.fn().mockReturnValue({
-            returning: jest.fn().mockResolvedValue([{ webhookUrl: 'https://hook.example.com', webhookSecret: 'secret' }]),
+            returning: jest
+              .fn()
+              .mockResolvedValue([
+                { webhookUrl: 'https://hook.example.com', webhookSecret: 'secret' },
+              ]),
           }),
         }),
       });
