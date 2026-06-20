@@ -9,6 +9,7 @@ import { WebhookModule } from './webhook/webhook.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { RedisModule } from './redis/redis.module';
 import { RateLimitModule } from './api/middleware/rate-limit.module';
+import { AuditModule } from './audit/audit.module';
 import { DynamicCorsMiddleware } from './middleware/dynamic-cors.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 
@@ -22,6 +23,7 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
     }),
     RedisModule,
     RateLimitModule,
+    AuditModule,
     AuthModule,
     MerchantsModule,
     CheckoutModule,
