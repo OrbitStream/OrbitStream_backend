@@ -1,5 +1,14 @@
 import type { Request } from 'express';
-import { isExempt, resolveRule, clientIp, apiKey, rateLimitIdentity } from './rate-limit.config';
+import * as jwt from 'jsonwebtoken';
+import {
+  isExempt,
+  resolveRule,
+  clientIp,
+  apiKey,
+  rateLimitIdentity,
+  resolveAuthTier,
+  authMultiplier,
+} from './rate-limit.config';
 
 describe('isExempt', () => {
   it.each(['/health', '/metrics', '/health/db', '/metrics/'])('exempts %s', (path) => {
@@ -15,9 +24,20 @@ describe('isExempt', () => {
 });
 
 describe('resolveRule', () => {
-  it('limits /auth/login and /auth/verify to 5/min per IP', () => {
-    expect(resolveRule('POST', '/auth/login')).toMatchObject({ limit: 5, scope: 'ip' });
-    expect(resolveRule('POST', '/auth/verify')).toMatchObject({ limit: 5, scope: 'ip' });
+  it('limits /auth/login to 5/min per IP', () => {
+    expect(resolveRule('POST', '/auth/login')).toMatchObject({
+      name: 'auth-login',
+      limit: 5,
+      scope: 'ip',
+    });
+  });
+
+  it('limits /auth/verify to 10/min per IP', () => {
+    expect(resolveRule('POST', '/auth/verify')).toMatchObject({
+      name: 'auth-verify',
+      limit: 10,
+      scope: 'ip',
+    });
   });
 
   it('limits /merchants/register to 3/min per IP', () => {
@@ -89,10 +109,55 @@ describe('rateLimitIdentity', () => {
 
   it('keys ip-scoped rules by IP', () => {
     const id = rateLimitIdentity(req({ 'x-forwarded-for': '2.2.2.2' }), {
-      name: 'auth',
+      name: 'auth-login',
       limit: 5,
       scope: 'ip',
     });
     expect(id).toBe('ip:2.2.2.2');
+  });
+});
+
+describe('auth tiers', () => {
+  const SECRET = 'a'.repeat(40); // satisfies the 32-char minimum
+  const originalSecret = process.env.JWT_SECRET;
+
+  beforeAll(() => {
+    process.env.JWT_SECRET = SECRET;
+  });
+
+  afterAll(() => {
+    if (originalSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = originalSecret;
+  });
+
+  it('maps each tier to the documented multiplier', () => {
+    expect(authMultiplier('unauthenticated')).toBe(1);
+    expect(authMultiplier('jwt')).toBe(2);
+    expect(authMultiplier('apiKey')).toBe(5);
+    expect(authMultiplier('admin')).toBe(10);
+  });
+
+  it('treats requests without a bearer token as unauthenticated', () => {
+    expect(resolveAuthTier(req({}))).toBe('unauthenticated');
+  });
+
+  it('recognises API secret keys by their sk_ prefix', () => {
+    expect(resolveAuthTier(req({ authorization: 'Bearer sk_test_abc123' }))).toBe('apiKey');
+    expect(resolveAuthTier(req({ authorization: 'Bearer sk_live_abc123' }))).toBe('apiKey');
+  });
+
+  it('recognises a valid JWT as the jwt tier', () => {
+    const token = jwt.sign({ walletAddress: 'GABC' }, SECRET);
+    expect(resolveAuthTier(req({ authorization: `Bearer ${token}` }))).toBe('jwt');
+  });
+
+  it('recognises an admin role claim as the admin tier', () => {
+    const token = jwt.sign({ walletAddress: 'GABC', role: 'admin' }, SECRET);
+    expect(resolveAuthTier(req({ authorization: `Bearer ${token}` }))).toBe('admin');
+  });
+
+  it('falls back to unauthenticated for a token with a bad signature', () => {
+    const token = jwt.sign({ walletAddress: 'GABC' }, 'a-different-secret-of-sufficient-length!!');
+    expect(resolveAuthTier(req({ authorization: `Bearer ${token}` }))).toBe('unauthenticated');
   });
 });

@@ -1,4 +1,6 @@
 import type { Request } from 'express';
+import * as jwt from 'jsonwebtoken';
+import { resolveJwtSecrets } from '../../config/jwt-secret.config';
 
 export const WINDOW_MS = 60_000; // 1 minute sliding window
 
@@ -31,9 +33,13 @@ const CHECKOUT_SESSIONS = /^\/v1\/checkout\/sessions\/?$/;
 export function resolveRule(method: string, path: string): RateLimitRule {
   const m = method.toUpperCase();
 
-  // Auth: tight per-IP limit on credential endpoints.
-  if (path === '/auth/login' || path === '/auth/verify') {
-    return { name: 'auth', limit: 5, scope: 'ip' };
+  // Auth: tight per-IP limits on credential endpoints. Login is the most
+  // brute-forceable, so it gets the tightest limit; verify is slightly looser.
+  if (path === '/auth/login') {
+    return { name: 'auth-login', limit: 5, scope: 'ip' };
+  }
+  if (path === '/auth/verify') {
+    return { name: 'auth-verify', limit: 10, scope: 'ip' };
   }
 
   // Merchant registration: very tight per-IP limit (anti-abuse).
@@ -86,4 +92,65 @@ export function rateLimitIdentity(req: Request, rule: RateLimitRule): string {
     if (key) return `key:${key}`;
   }
   return `ip:${clientIp(req)}`;
+}
+
+/**
+ * Caller authentication tier. Authenticated callers earn a higher ceiling than
+ * anonymous traffic, and trusted API/admin callers higher still.
+ */
+export type AuthTier = 'unauthenticated' | 'jwt' | 'apiKey' | 'admin';
+
+/** Per-auth-type multipliers applied on top of the base per-endpoint limit. */
+const AUTH_MULTIPLIERS: Record<AuthTier, number> = {
+  unauthenticated: 1,
+  jwt: 2,
+  apiKey: 5,
+  admin: 10,
+};
+
+export function authMultiplier(tier: AuthTier): number {
+  return AUTH_MULTIPLIERS[tier];
+}
+
+/**
+ * Classify a request's auth tier from the `Authorization` header alone — no
+ * database round-trips on the hot path:
+ *
+ *   - API secret keys carry the `sk_` prefix            → apiKey (5x)
+ *   - A verifiable JWT carrying an `admin` role claim    → admin  (10x)
+ *   - Any other verifiable JWT                           → jwt    (2x)
+ *   - No / invalid credentials                           → unauthenticated (1x)
+ */
+export function resolveAuthTier(req: Request): AuthTier {
+  const token = apiKey(req);
+  if (!token) return 'unauthenticated';
+  if (token.startsWith('sk_')) return 'apiKey';
+
+  const claims = verifyJwt(token);
+  if (!claims) return 'unauthenticated';
+  return claims.role === 'admin' ? 'admin' : 'jwt';
+}
+
+/**
+ * Verify a bearer token against the active (and, during rotation, previous) JWT
+ * secret. Returns the decoded claims, or `null` when the token is not a valid
+ * JWT. Never throws — an unverifiable token simply falls back to the anonymous
+ * tier.
+ */
+function verifyJwt(token: string): { role?: string } | null {
+  let secrets;
+  try {
+    secrets = resolveJwtSecrets();
+  } catch {
+    return null;
+  }
+  for (const secret of [secrets.current, secrets.previous]) {
+    if (!secret) continue;
+    try {
+      return jwt.verify(token, secret) as { role?: string };
+    } catch {
+      // Try the next secret (rotation window) before giving up.
+    }
+  }
+  return null;
 }

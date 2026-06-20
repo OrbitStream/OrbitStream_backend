@@ -34,12 +34,17 @@ function mockRes(): {
   return { res: res as Response, headers, status, json };
 }
 
-function mockReq(method: string, path: string, ip = '1.1.1.1'): Request {
+function mockReq(
+  method: string,
+  path: string,
+  ip = '1.1.1.1',
+  headers: Record<string, string> = {},
+): Request {
   return {
     method,
     path,
     ip,
-    headers: { 'x-forwarded-for': ip },
+    headers: { 'x-forwarded-for': ip, ...headers },
     socket: { remoteAddress: ip },
   } as unknown as Request;
 }
@@ -84,11 +89,31 @@ describe('RateLimitMiddleware', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(status).toHaveBeenCalledWith(429);
-    expect(json).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 429, error: 'Too Many Requests' }),
-    );
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 429,
+      message: 'Rate limit exceeded',
+      error: 'Too Many Requests',
+      retryAfter: expect.any(Number),
+    });
     expect(headers['Retry-After']).toBeDefined();
     expect(Number(headers['Retry-After'])).toBeGreaterThanOrEqual(1);
     expect(headers['X-RateLimit-Remaining']).toBe('0');
+  });
+
+  it('scales the base limit by the API-key auth multiplier (5x)', async () => {
+    const { middleware } = buildMiddleware();
+    const { res, headers } = mockRes();
+    const next = jest.fn();
+
+    // Default route base limit is 60; an API key (sk_) earns 5x → 300.
+    await middleware.use(
+      mockReq('GET', '/merchants/me', '4.4.4.4', { authorization: 'Bearer sk_test_abcdef' }),
+      res,
+      next,
+    );
+
+    expect(next).toHaveBeenCalled();
+    expect(headers['X-RateLimit-Limit']).toBe('300');
+    expect(headers['X-RateLimit-Remaining']).toBe('299');
   });
 });
