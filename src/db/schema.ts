@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -16,6 +17,7 @@ export const merchantRoleEnum = pgEnum('merchant_role', ['admin', 'merchant', 'v
 
 export const sessionStatusEnum = pgEnum('session_status', [
   'pending',
+  'processing',
   'paid',
   'expired',
   'cancelled',
@@ -71,22 +73,31 @@ export const checkoutSessions = pgTable('checkout_sessions', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
-export const payments = pgTable('payments', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  sessionId: uuid('session_id')
-    .notNull()
-    .references(() => checkoutSessions.id, { onDelete: 'cascade' }),
-  merchantId: uuid('merchant_id')
-    .notNull()
-    .references(() => merchants.id),
-  txHash: text('tx_hash').notNull().unique(),
-  amount: numeric('amount', { precision: 36, scale: 7 }).notNull(),
-  assetCode: text('asset_code').notNull(),
-  assetIssuer: text('asset_issuer'),
-  senderAddress: text('sender_address').notNull(),
-  confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-});
+export const payments = pgTable(
+  'payments',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => checkoutSessions.id, { onDelete: 'cascade' }),
+    merchantId: uuid('merchant_id')
+      .notNull()
+      .references(() => merchants.id),
+    txHash: text('tx_hash').notNull(),
+    amount: numeric('amount', { precision: 36, scale: 7 }).notNull(),
+    assetCode: text('asset_code').notNull(),
+    assetIssuer: text('asset_issuer'),
+    senderAddress: text('sender_address').notNull(),
+    confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    // Idempotency key: a tx hash can only ever confirm one session (Stellar memos
+    // are transaction-level), so the pair must be unique to safely support
+    // ON CONFLICT DO NOTHING upserts in processPayment and the recovery job.
+    unique('payment_idempotency_key').on(table.txHash, table.sessionId),
+  ],
+);
 
 export interface WebhookDeliveryAttempt {
   attempt: number;

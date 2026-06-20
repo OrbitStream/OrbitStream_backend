@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomUUID } from 'crypto';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
@@ -15,6 +15,7 @@ interface LockedSessionRow {
   amount: string;
   asset_code: string;
   memo: string | null;
+  status: string;
 }
 
 const DEFAULT_INTERVAL_MS = 3_000;
@@ -144,20 +145,87 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
 
     const txHash = op.transaction_hash;
 
-    const existingPayment = await db.query.payments.findFirst({
-      where: eq(payments.txHash, txHash),
-    });
-    if (existingPayment) {
-      this.logger.warn(`Duplicate payment ${txHash} — skipping`);
+    // Phase 1: lock the session and claim it (pending -> processing) in its own
+    // transaction. Committing this transition independently of the payment insert
+    // is what makes a crash between the two phases observable: the session is left
+    // in 'processing' rather than silently reverting to 'pending', so the recovery
+    // job can find and reconcile it instead of two pollers racing on the same memo.
+    const session = await this.claimSession(memo, op, txHash);
+    if (!session) return;
+
+    // Phase 2: insert the payment record and finalize the session as paid.
+    try {
+      await db.transaction(async (tx) => {
+        await tx
+          .insert(payments)
+          .values({
+            sessionId: session.id,
+            merchantId: session.merchant_id,
+            txHash,
+            amount: op.amount,
+            assetCode: op.asset_code ?? 'XLM',
+            assetIssuer: op.asset_issuer ?? null,
+            senderAddress: op.from,
+            confirmedAt: new Date(),
+          } as any)
+          .onConflictDoNothing({ target: [payments.txHash, payments.sessionId] });
+
+        await tx
+          .update(checkoutSessions)
+          .set({ status: 'paid' } as any)
+          .where(eq(checkoutSessions.id, session.id));
+      });
+    } catch (err) {
+      this.logger.error(
+        `Failed to finalize payment for session ${session.id} — tx ${txHash}; session left in 'processing' for recovery`,
+        err as Error,
+      );
       return;
     }
 
-    await db.transaction(async (tx) => {
+    this.metrics.paymentsConfirmed.inc();
+    this.logger.log(`Payment confirmed for session ${session.id} — tx ${txHash}`);
+
+    await this.webhooks.dispatchWebhook(session.merchant_id, 'payment.confirmed', {
+      sessionId: session.id,
+      txHash,
+      amount: op.amount,
+      asset: op.asset_code ?? 'XLM',
+      sender: op.from,
+    });
+  }
+
+  /**
+   * Locks the session row matching `memo`, validates it, and atomically
+   * transitions it from 'pending' to 'processing'. Returns the claimed session
+   * row, or null (after logging why) if the payment should not proceed:
+   * the session doesn't exist, is already paid/non-pending, fails amount/asset
+   * validation, was already recorded under this idempotency key, or lost the
+   * claim race to a concurrent processPayment/recovery run.
+   */
+  private async claimSession(
+    memo: string,
+    op: any,
+    txHash: string,
+  ): Promise<LockedSessionRow | null> {
+    return db.transaction(async (tx) => {
       const lockedSessions = (await tx.execute(
-        sql`SELECT * FROM checkout_sessions WHERE memo = ${memo} AND status = 'pending' FOR UPDATE`,
+        sql`SELECT * FROM checkout_sessions WHERE memo = ${memo} FOR UPDATE`,
       )) as unknown as LockedSessionRow[];
       const session = lockedSessions[0];
-      if (!session) return;
+      if (!session) return null;
+
+      if (session.status === 'paid') {
+        this.logger.warn(`Duplicate payment for already-paid session ${session.id} — tx ${txHash}`);
+        return null;
+      }
+
+      if (session.status !== 'pending') {
+        this.logger.warn(
+          `Session ${session.id} is not pending (status=${session.status}) — skipping tx ${txHash}`,
+        );
+        return null;
+      }
 
       const opAmount = parseFloat(op.amount);
       const sessionAmount = parseFloat(session.amount);
@@ -165,42 +233,38 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
         );
-        return;
+        return null;
       }
 
       if (op.asset_code !== session.asset_code && session.asset_code !== 'XLM') {
         this.logger.warn(
           `Asset mismatch for memo ${memo}: expected ${session.asset_code}, got ${op.asset_code}`,
         );
-        return;
+        return null;
       }
 
-      await tx
-        .update(checkoutSessions)
-        .set({ status: 'paid' } as any)
-        .where(eq(checkoutSessions.id, session.id));
-
-      await tx.insert(payments).values({
-        sessionId: session.id,
-        merchantId: session.merchant_id,
-        txHash,
-        amount: op.amount,
-        assetCode: op.asset_code ?? 'XLM',
-        assetIssuer: op.asset_issuer ?? null,
-        senderAddress: op.from,
-        confirmedAt: new Date(),
-      } as any);
-
-      this.metrics.paymentsConfirmed.inc();
-      this.logger.log(`Payment confirmed for session ${session.id} — tx ${txHash}`);
-
-      await this.webhooks.dispatchWebhook(session.merchant_id, 'payment.confirmed', {
-        sessionId: session.id,
-        txHash,
-        amount: op.amount,
-        asset: op.asset_code ?? 'XLM',
-        sender: op.from,
+      const existingPayment = await tx.query.payments.findFirst({
+        where: and(eq(payments.txHash, txHash), eq(payments.sessionId, session.id)),
       });
+      if (existingPayment) {
+        this.logger.warn(
+          `Payment ${txHash} already recorded for session ${session.id} — skipping insert (idempotent)`,
+        );
+        return null;
+      }
+
+      const claimed = await tx
+        .update(checkoutSessions)
+        .set({ status: 'processing' } as any)
+        .where(and(eq(checkoutSessions.id, session.id), eq(checkoutSessions.status, 'pending')))
+        .returning({ id: checkoutSessions.id });
+
+      if (claimed.length === 0) {
+        this.logger.warn(`Lost claim race for session ${session.id} — tx ${txHash}`);
+        return null;
+      }
+
+      return session;
     });
   }
 
