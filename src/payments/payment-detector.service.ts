@@ -2,11 +2,20 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { randomUUID } from 'crypto';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { PaymentCursorService, PERSIST_EVERY } from './payment-cursor.service';
+
+interface LockedSessionRow {
+  id: string;
+  merchant_id: string;
+  amount: string;
+  asset_code: string;
+  memo: string | null;
+}
 
 const DEFAULT_INTERVAL_MS = 3_000;
 const BACKOFF_429_MS = 10_000;
@@ -133,52 +142,65 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
     const memo = op.transaction_memo;
     if (!memo) return;
 
-    const session = await db.query.checkoutSessions.findFirst({
-      where: and(eq(checkoutSessions.memo, memo), eq(checkoutSessions.status, 'pending')),
+    const txHash = op.transaction_hash;
+
+    const existingPayment = await db.query.payments.findFirst({
+      where: eq(payments.txHash, txHash),
     });
-    if (!session) return;
-
-    const opAmount = parseFloat(op.amount);
-    const sessionAmount = parseFloat(session.amount);
-    if (Math.abs(opAmount - sessionAmount) > 0.0000001) {
-      this.logger.warn(
-        `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
-      );
+    if (existingPayment) {
+      this.logger.warn(`Duplicate payment ${txHash} — skipping`);
       return;
     }
 
-    if (op.asset_code !== session.assetCode && session.assetCode !== 'XLM') {
-      this.logger.warn(
-        `Asset mismatch for memo ${memo}: expected ${session.assetCode}, got ${op.asset_code}`,
-      );
-      return;
-    }
+    await db.transaction(async (tx) => {
+      const lockedSessions = (await tx.execute(
+        sql`SELECT * FROM checkout_sessions WHERE memo = ${memo} AND status = 'pending' FOR UPDATE`,
+      )) as unknown as LockedSessionRow[];
+      const session = lockedSessions[0];
+      if (!session) return;
 
-    await db
-      .update(checkoutSessions)
-      .set({ status: 'paid' } as any)
-      .where(eq(checkoutSessions.id, session.id));
+      const opAmount = parseFloat(op.amount);
+      const sessionAmount = parseFloat(session.amount);
+      if (Math.abs(opAmount - sessionAmount) > 0.0000001) {
+        this.logger.warn(
+          `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
+        );
+        return;
+      }
 
-    await db.insert(payments).values({
-      sessionId: session.id,
-      merchantId: session.merchantId,
-      txHash: op.transaction_hash,
-      amount: op.amount,
-      assetCode: op.asset_code ?? 'XLM',
-      assetIssuer: op.asset_issuer ?? null,
-      senderAddress: op.from,
-      confirmedAt: new Date(),
-    } as any);
+      if (op.asset_code !== session.asset_code && session.asset_code !== 'XLM') {
+        this.logger.warn(
+          `Asset mismatch for memo ${memo}: expected ${session.asset_code}, got ${op.asset_code}`,
+        );
+        return;
+      }
 
-    this.metrics.paymentsConfirmed.inc();
-    this.logger.log(`Payment confirmed for session ${session.id} — tx ${op.transaction_hash}`);
+      await tx
+        .update(checkoutSessions)
+        .set({ status: 'paid' } as any)
+        .where(eq(checkoutSessions.id, session.id));
 
-    await this.webhooks.dispatchWebhook(session.merchantId, 'payment.confirmed', {
-      sessionId: session.id,
-      txHash: op.transaction_hash,
-      amount: op.amount,
-      asset: op.asset_code ?? 'XLM',
-      sender: op.from,
+      await tx.insert(payments).values({
+        sessionId: session.id,
+        merchantId: session.merchant_id,
+        txHash,
+        amount: op.amount,
+        assetCode: op.asset_code ?? 'XLM',
+        assetIssuer: op.asset_issuer ?? null,
+        senderAddress: op.from,
+        confirmedAt: new Date(),
+      } as any);
+
+      this.metrics.paymentsConfirmed.inc();
+      this.logger.log(`Payment confirmed for session ${session.id} — tx ${txHash}`);
+
+      await this.webhooks.dispatchWebhook(session.merchant_id, 'payment.confirmed', {
+        sessionId: session.id,
+        txHash,
+        amount: op.amount,
+        asset: op.asset_code ?? 'XLM',
+        sender: op.from,
+      });
     });
   }
 
