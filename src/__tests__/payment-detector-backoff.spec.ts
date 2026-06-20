@@ -14,6 +14,7 @@ import { PaymentCursorService } from '../payments/payment-cursor.service';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
+import { AdaptiveLimitService } from '../api/middleware/adaptive-limit.service';
 
 // White-box access to private backoff state
 function priv(svc: PaymentDetectorService): any {
@@ -58,6 +59,10 @@ describe('PaymentDetectorService — rate-limit backoff', () => {
             updateCursor: jest.fn().mockResolvedValue(true),
             appendCheckpoint: jest.fn(),
           },
+        },
+        {
+          provide: AdaptiveLimitService,
+          useValue: { recordPayment: jest.fn() },
         },
       ],
     }).compile();

@@ -38,6 +38,7 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
   let mockWebhooks: jest.Mocked<WebhookService>;
   let mockMetrics: jest.Mocked<MetricsService>;
   let mockCursorService: jest.Mocked<PaymentCursorService>;
+  let mockAdaptiveLimits: { recordPayment: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -64,7 +65,17 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
       releaseLock: jest.fn(),
     } as any;
 
-    service = new PaymentDetectorService(mockStellar, mockWebhooks, mockMetrics, mockCursorService);
+    mockAdaptiveLimits = {
+      recordPayment: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
+    service = new PaymentDetectorService(
+      mockStellar,
+      mockWebhooks,
+      mockMetrics,
+      mockCursorService,
+      mockAdaptiveLimits as any,
+    );
   });
 
   describe('idempotency check', () => {
@@ -150,6 +161,8 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
       expect(mockTx.update).toHaveBeenCalledTimes(1);
       expect(mockTx.insert).toHaveBeenCalledTimes(1);
       expect(mockWebhooks.dispatchWebhook).toHaveBeenCalledTimes(1);
+      // The confirmed payment feeds the adaptive rate limiter, keyed by merchant.
+      expect(mockAdaptiveLimits.recordPayment).toHaveBeenCalledWith('merchant-1');
     });
 
     it('uses SELECT FOR UPDATE to lock session row', async () => {
@@ -203,6 +216,8 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
       expect(mockTx.update).not.toHaveBeenCalled();
       expect(mockTx.insert).not.toHaveBeenCalled();
       expect(mockWebhooks.dispatchWebhook).not.toHaveBeenCalled();
+      // No confirmed payment → nothing recorded for adaptive limits.
+      expect(mockAdaptiveLimits.recordPayment).not.toHaveBeenCalled();
     });
   });
 

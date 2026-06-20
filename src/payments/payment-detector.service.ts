@@ -8,6 +8,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { PaymentCursorService, PERSIST_EVERY } from './payment-cursor.service';
+import { AdaptiveLimitService } from '../api/middleware/adaptive-limit.service';
 
 interface LockedSessionRow {
   id: string;
@@ -40,6 +41,7 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
     private readonly webhooks: WebhookService,
     private readonly metrics: MetricsService,
     private readonly cursorService: PaymentCursorService,
+    private readonly adaptiveLimits: AdaptiveLimitService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -152,12 +154,12 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    await db.transaction(async (tx) => {
+    const confirmedMerchantId = await db.transaction(async (tx) => {
       const lockedSessions = (await tx.execute(
         sql`SELECT * FROM checkout_sessions WHERE memo = ${memo} AND status = 'pending' FOR UPDATE`,
       )) as unknown as LockedSessionRow[];
       const session = lockedSessions[0];
-      if (!session) return;
+      if (!session) return undefined;
 
       const opAmount = parseFloat(op.amount);
       const sessionAmount = parseFloat(session.amount);
@@ -165,14 +167,14 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
         this.logger.warn(
           `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
         );
-        return;
+        return undefined;
       }
 
       if (op.asset_code !== session.asset_code && session.asset_code !== 'XLM') {
         this.logger.warn(
           `Asset mismatch for memo ${memo}: expected ${session.asset_code}, got ${op.asset_code}`,
         );
-        return;
+        return undefined;
       }
 
       await tx
@@ -201,7 +203,15 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
         asset: op.asset_code ?? 'XLM',
         sender: op.from,
       });
+
+      return session.merchant_id;
     });
+
+    // Feed the adaptive rate limiter only after the payment is durably committed,
+    // so a rolled-back transaction never inflates a merchant's hourly count.
+    if (confirmedMerchantId) {
+      await this.adaptiveLimits.recordPayment(confirmedMerchantId);
+    }
   }
 
   private sleep(ms: number): Promise<void> {

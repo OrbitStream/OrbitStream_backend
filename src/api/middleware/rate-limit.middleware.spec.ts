@@ -2,16 +2,32 @@ import type { Request, Response } from 'express';
 import RedisMock from 'ioredis-mock';
 import { RateLimitMiddleware } from './rate-limit.middleware';
 import { RateLimitService } from './rate-limit.service';
+import { AdaptiveLimitService } from './adaptive-limit.service';
+import type { MerchantsService } from '../../merchants/merchants.service';
 import type { RedisService } from '../../redis/redis.service';
 
-function buildMiddleware() {
+function buildMiddleware(
+  overrides: {
+    bonus?: number;
+    merchantId?: string | null;
+  } = {},
+) {
   const client = new RedisMock();
   const redisService = { getClient: () => client } as unknown as RedisService;
   const service = new RateLimitService(redisService);
-  const middleware = new RateLimitMiddleware(service);
+
+  const adaptive = {
+    getCheckoutBonus: jest.fn().mockResolvedValue(overrides.bonus ?? 1),
+  } as unknown as AdaptiveLimitService;
+
+  const merchants = {
+    validateApiKey: jest.fn().mockResolvedValue(overrides.merchantId ?? null),
+  } as unknown as MerchantsService;
+
+  const middleware = new RateLimitMiddleware(service, adaptive, merchants);
   // Silence the breach warning.
   jest.spyOn((middleware as any).logger, 'warn').mockImplementation(() => undefined);
-  return { middleware, client };
+  return { middleware, client, adaptive, merchants };
 }
 
 function mockRes(): {
@@ -115,5 +131,38 @@ describe('RateLimitMiddleware', () => {
     expect(next).toHaveBeenCalled();
     expect(headers['X-RateLimit-Limit']).toBe('300');
     expect(headers['X-RateLimit-Remaining']).toBe('299');
+  });
+
+  it('applies the adaptive +50% bonus to checkout creation for busy merchants', async () => {
+    const { middleware, merchants } = buildMiddleware({ bonus: 1.5, merchantId: 'merchant-1' });
+    const { res, headers } = mockRes();
+    const next = jest.fn();
+
+    // POST /v1/checkout/sessions base 100 × apiKey 5x × adaptive 1.5 = 750.
+    await middleware.use(
+      mockReq('POST', '/v1/checkout/sessions', '5.5.5.5', { authorization: 'Bearer sk_test_busy' }),
+      res,
+      next,
+    );
+
+    expect(next).toHaveBeenCalled();
+    expect(merchants.validateApiKey).toHaveBeenCalledWith('sk_test_busy');
+    expect(headers['X-RateLimit-Limit']).toBe('750');
+  });
+
+  it('does not apply the adaptive bonus to non-checkout routes', async () => {
+    const { middleware, merchants } = buildMiddleware({ bonus: 1.5, merchantId: 'merchant-1' });
+    const { res, headers } = mockRes();
+    const next = jest.fn();
+
+    await middleware.use(
+      mockReq('GET', '/merchants/me', '6.6.6.6', { authorization: 'Bearer sk_test_busy' }),
+      res,
+      next,
+    );
+
+    expect(merchants.validateApiKey).not.toHaveBeenCalled();
+    // Default base 60 × apiKey 5x, no adaptive bonus.
+    expect(headers['X-RateLimit-Limit']).toBe('300');
   });
 });

@@ -5,9 +5,10 @@ import { PaymentRecoveryService } from './payment-recovery.service';
 import { StellarModule } from '../stellar/stellar.module';
 import { WebhookModule } from '../webhook/webhook.module';
 import { MonitoringModule } from '../monitoring/monitoring.module';
+import { RateLimitModule } from '../api/middleware/rate-limit.module';
 
 @Module({
-  imports: [StellarModule, WebhookModule, MonitoringModule],
+  imports: [StellarModule, WebhookModule, MonitoringModule, RateLimitModule],
   providers: [PaymentDetectorService, PaymentCursorService, PaymentRecoveryService],
 })
 export class PaymentsModule {}

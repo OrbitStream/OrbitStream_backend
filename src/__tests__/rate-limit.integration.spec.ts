@@ -3,6 +3,8 @@ import request from 'supertest';
 import RedisMock from 'ioredis-mock';
 import { RateLimitMiddleware } from '../api/middleware/rate-limit.middleware';
 import { RateLimitService } from '../api/middleware/rate-limit.service';
+import { AdaptiveLimitService } from '../api/middleware/adaptive-limit.service';
+import type { MerchantsService } from '../merchants/merchants.service';
 import type { RedisService } from '../redis/redis.service';
 
 /**
@@ -15,7 +17,11 @@ function buildApp() {
   const client = new RedisMock();
   const redisService = { getClient: () => client } as unknown as RedisService;
   const service = new RateLimitService(redisService);
-  const limiter = new RateLimitMiddleware(service);
+  const adaptive = new AdaptiveLimitService(redisService);
+  const merchants = {
+    validateApiKey: jest.fn().mockResolvedValue(null),
+  } as unknown as MerchantsService;
+  const limiter = new RateLimitMiddleware(service, adaptive, merchants);
   jest.spyOn((limiter as any).logger, 'warn').mockImplementation(() => undefined);
 
   const app = express();
