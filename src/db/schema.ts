@@ -12,6 +12,8 @@ import {
 
 export const apiKeyEnvironmentEnum = pgEnum('api_key_environment', ['testnet', 'mainnet']);
 
+export const merchantRoleEnum = pgEnum('merchant_role', ['admin', 'merchant', 'viewer']);
+
 export const sessionStatusEnum = pgEnum('session_status', [
   'pending',
   'paid',
@@ -31,6 +33,7 @@ export const merchants = pgTable('merchants', {
   walletAddress: text('wallet_address').notNull().unique(),
   businessName: text('business_name').notNull(),
   email: text('email').notNull().unique(),
+  role: merchantRoleEnum('role').notNull().default('merchant'),
   webhookUrl: text('webhook_url'),
   webhookSecret: text('webhook_secret'),
   logoUrl: text('logo_url'),
@@ -138,6 +141,18 @@ export const webhookDeadLetters = pgTable('webhook_dead_letters', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id').references(() => merchants.id),
+  action: text('action').notNull(),
+  resourceType: text('resource_type').notNull(),
+  resourceId: uuid('resource_id'),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  details: jsonb('details'),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const schema = {
   merchants,
   apiKeys,
@@ -145,4 +160,5 @@ export const schema = {
   payments,
   webhookDeliveries,
   webhookDeadLetters,
+  auditLogs,
 };
