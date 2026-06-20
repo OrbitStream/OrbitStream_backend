@@ -8,6 +8,7 @@ import { StellarModule } from './stellar/stellar.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { RedisModule } from './redis/redis.module';
+import { RateLimitModule } from './api/middleware/rate-limit.module';
 import { DynamicCorsMiddleware } from './middleware/dynamic-cors.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 
@@ -20,6 +21,7 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
       synchronize: process.env.NODE_ENV !== 'production',
     }),
     RedisModule,
+    RateLimitModule,
     AuthModule,
     MerchantsModule,
     CheckoutModule,

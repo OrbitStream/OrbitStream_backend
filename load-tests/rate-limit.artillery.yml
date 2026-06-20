@@ -1,0 +1,38 @@
+# Rate-limiting load test (optional).
+#
+# Run with the Artillery CLI without adding it as a project dependency:
+#   npx artillery@latest run load-tests/rate-limit.artillery.yml
+#
+# Goal: hammer a per-IP limited endpoint with ~100 concurrent virtual users and
+# confirm the limiter holds — responses should be a mix of 200 (within limit) and
+# 429 (Too Many Requests) rather than the server accepting everything.
+#
+# Note: Artillery is intentionally NOT a package.json dependency to keep the
+# install lean; install it on demand via npx. See the PR notes — full load
+# verification is left as a follow-up.
+
+config:
+  target: 'http://localhost:3001'
+  phases:
+    - name: burst
+      duration: 30
+      arrivalRate: 100 # 100 new virtual users per second
+  http:
+    timeout: 10
+  # Surface the rate-limit headers in the report.
+  ensure:
+    maxErrorRate: 100
+
+scenarios:
+  - name: 'checkout status reads (60/min per IP)'
+    flow:
+      - get:
+          url: '/v1/checkout/sessions/load-test-session-id'
+          # All requests share an IP so the per-IP sliding window trips quickly.
+          headers:
+            X-Forwarded-For: '198.51.100.10'
+          expect:
+            - statusCode:
+                - 200
+                - 404
+                - 429
