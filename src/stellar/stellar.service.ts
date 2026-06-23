@@ -40,17 +40,27 @@ export class StellarService {
     return data._embedded?.records ?? [];
   }
 
-  async getPaymentsForAccount(accountAddress: string, cursor?: string) {
-    const { records } = await this.getPaymentsPage(accountAddress, cursor);
+  async getPaymentsForAccount(
+    accountAddress: string,
+    cursor?: string,
+    order: 'asc' | 'desc' = 'asc',
+  ) {
+    const { records } = await this.getPaymentsPage(accountAddress, cursor, order);
     return records;
   }
 
   /**
    * Fetch a page of payments and return Horizon rate-limit metadata alongside the records.
    * Throws an AxiosError on non-2xx responses so callers can inspect the HTTP status.
+   * `order: 'desc'` is used by the recovery job to look for a recent confirmation
+   * without needing a stored cursor.
    */
-  async getPaymentsPage(accountAddress: string, cursor?: string): Promise<PaymentsPage> {
-    const params: any = { order: 'asc', limit: 50 };
+  async getPaymentsPage(
+    accountAddress: string,
+    cursor?: string,
+    order: 'asc' | 'desc' = 'asc',
+  ): Promise<PaymentsPage> {
+    const params: any = { order, limit: 50 };
     if (cursor && cursor !== 'now') params.cursor = cursor;
 
     const response = await axios.get(`${this.horizonUrl}/accounts/${accountAddress}/payments`, {

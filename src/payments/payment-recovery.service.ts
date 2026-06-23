@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
-import { eq } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
+import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 
 const STALE_MINUTES = 5;
@@ -11,6 +11,16 @@ const STALE_MINUTES = 5;
 interface StaleSessionRow {
   id: string;
   memo: string | null;
+}
+
+interface StuckProcessingRow {
+  id: string;
+  merchant_id: string;
+  memo: string | null;
+  amount: string;
+  asset_code: string;
+  asset_issuer: string | null;
+  receiving_account: string;
 }
 
 interface PaidWithoutPaymentRow {
@@ -33,15 +43,132 @@ interface PendingWithPaymentRow {
 export class PaymentRecoveryService {
   private readonly logger = new Logger(PaymentRecoveryService.name);
 
-  constructor(private readonly webhooks: WebhookService) {}
+  constructor(
+    private readonly webhooks: WebhookService,
+    private readonly stellar: StellarService,
+  ) {}
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async recoverStaleSessions(): Promise<void> {
     this.logger.debug('Running payment recovery job');
 
+    await this.recoverStuckProcessing();
     await this.recoverPendingWithPayments();
     await this.recoverStuckPending();
     await this.recoverPaidWithoutPayments();
+  }
+
+  /**
+   * Sessions stuck in 'processing' mean processPayment's claim phase committed
+   * but the process crashed (or errored) before the payment insert + paid
+   * transition could commit. Re-checks Horizon by memo to decide whether to
+   * complete the payment or release the session back to 'pending'.
+   */
+  private async recoverStuckProcessing(): Promise<void> {
+    const staleThreshold = new Date(Date.now() - STALE_MINUTES * 60 * 1000);
+
+    const stuck = (await db.execute(sql`
+      SELECT id, merchant_id, memo, amount, asset_code, asset_issuer, receiving_account
+      FROM checkout_sessions
+      WHERE status = 'processing' AND created_at < ${staleThreshold}
+    `)) as unknown as StuckProcessingRow[];
+
+    if (!stuck.length) return;
+
+    this.logger.warn(
+      `Found ${stuck.length} session(s) stuck in processing for >${STALE_MINUTES} minutes`,
+    );
+
+    for (const row of stuck) {
+      try {
+        await this.reconcileStuckSession(row);
+      } catch (err) {
+        this.logger.error(`Failed to reconcile stuck session ${row.id}`, err as Error);
+      }
+    }
+  }
+
+  private async reconcileStuckSession(row: StuckProcessingRow): Promise<void> {
+    const match = row.memo ? await this.findConfirmingPayment(row) : null;
+
+    if (!match) {
+      this.logger.warn(
+        `Stuck session ${row.id} — no confirming payment found on Horizon, reverting to pending`,
+      );
+      await this.revertToPending(row.id);
+      return;
+    }
+
+    const confirmed = await this.stellar.verifyTransaction(match.transaction_hash);
+    if (!confirmed) {
+      this.logger.warn(
+        `Stuck session ${row.id} — transaction ${match.transaction_hash} not successful on Horizon, reverting to pending`,
+      );
+      await this.revertToPending(row.id);
+      return;
+    }
+
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(payments)
+        .values({
+          sessionId: row.id,
+          merchantId: row.merchant_id,
+          txHash: match.transaction_hash,
+          amount: match.amount,
+          assetCode: match.asset_code ?? 'XLM',
+          assetIssuer: match.asset_issuer ?? null,
+          senderAddress: match.from,
+          confirmedAt: new Date(),
+        } as any)
+        .onConflictDoNothing({ target: [payments.txHash, payments.sessionId] });
+
+      await tx
+        .update(checkoutSessions)
+        .set({ status: 'paid' } as any)
+        .where(eq(checkoutSessions.id, row.id));
+    });
+
+    this.logger.log(
+      `Recovered stuck session ${row.id} — confirmed via Horizon tx ${match.transaction_hash}, marked as paid`,
+    );
+
+    await this.webhooks.dispatchWebhook(row.merchant_id, 'payment.confirmed', {
+      sessionId: row.id,
+      txHash: match.transaction_hash,
+      amount: match.amount,
+      asset: match.asset_code ?? 'XLM',
+      sender: match.from,
+    });
+  }
+
+  /** Searches the receiving account's recent Horizon payments for one matching this session. */
+  private async findConfirmingPayment(row: StuckProcessingRow): Promise<any | null> {
+    const records = await this.stellar.getPaymentsForAccount(
+      row.receiving_account,
+      undefined,
+      'desc',
+    );
+
+    const sessionAmount = parseFloat(row.amount);
+    return (
+      records.find(
+        (r: any) =>
+          r.type === 'payment' &&
+          r.transaction_memo === row.memo &&
+          Math.abs(parseFloat(r.amount) - sessionAmount) < 0.0000001 &&
+          (r.asset_code === row.asset_code || row.asset_code === 'XLM'),
+      ) ?? null
+    );
+  }
+
+  /** Releases a stuck 'processing' session back to 'pending' so it can be re-detected. */
+  private async revertToPending(sessionId: string): Promise<void> {
+    await db
+      .update(checkoutSessions)
+      .set({ status: 'pending' } as any)
+      .where(and(eq(checkoutSessions.id, sessionId), eq(checkoutSessions.status, 'processing')));
+    this.logger.log(`Reverted session ${sessionId} to pending for re-detection`);
   }
 
   private async recoverPendingWithPayments(): Promise<void> {
