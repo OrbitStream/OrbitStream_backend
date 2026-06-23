@@ -1,10 +1,80 @@
+import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
+import { TypeOrmHealthIndicator } from '@nestjs/terminus';
+import request from 'supertest';
+import { AppModule } from '../app.module';
+import { CorsOriginsCacheService } from '../middleware/cors-origins-cache.service';
+import { PaymentDetectorService } from '../payments/payment-detector.service';
+import { RedisService } from '../redis/redis.service';
+
+jest.mock('@nestjs/typeorm', () => {
+  const actual = jest.requireActual('@nestjs/typeorm');
+
+  return {
+    ...actual,
+    TypeOrmModule: {
+      ...actual.TypeOrmModule,
+      forRoot: jest.fn(() => ({
+        module: class MockTypeOrmModule {},
+      })),
+    },
+  };
+});
+
 describe('App smoke test', () => {
-  it('should have basic module structure', () => {
-    expect(true).toBe(true);
+  let app: INestApplication;
+
+  beforeAll(async () => {
+    const redisClient = {
+      get: jest.fn().mockResolvedValue(null),
+      lrange: jest.fn().mockResolvedValue([]),
+      set: jest.fn().mockResolvedValue('OK'),
+      expire: jest.fn().mockResolvedValue(1),
+      del: jest.fn().mockResolvedValue(1),
+      quit: jest.fn().mockResolvedValue('OK'),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(TypeOrmHealthIndicator)
+      .useValue({
+        pingCheck: jest.fn().mockResolvedValue({
+          database: {
+            status: 'up',
+          },
+        }),
+      })
+      .overrideProvider(RedisService)
+      .useValue({
+        getClient: jest.fn(() => redisClient),
+        onModuleInit: jest.fn(),
+        onModuleDestroy: jest.fn(),
+      })
+      .overrideProvider(PaymentDetectorService)
+      .useValue({
+        onModuleInit: jest.fn(),
+        onModuleDestroy: jest.fn(),
+      })
+      .overrideProvider(CorsOriginsCacheService)
+      .useValue({
+        getAllMerchantOrigins: jest.fn().mockResolvedValue([]),
+      })
+      .compile();
+
+    app = module.createNestApplication();
+    await app.init();
   });
 
-  it('should export AppModule', async () => {
-    const { AppModule } = await import('../app.module');
-    expect(AppModule).toBeDefined();
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('should be defined', () => {
+    expect(app).toBeDefined();
+  });
+
+  it('should have health endpoint', () => {
+    return request(app.getHttpServer()).get('/health').expect(200);
   });
 });

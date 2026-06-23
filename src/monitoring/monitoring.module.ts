@@ -8,5 +8,6 @@ import { MetricsService } from './metrics.service';
   imports: [TerminusModule],
   controllers: [HealthController, MetricsController],
   providers: [MetricsService],
+  exports: [MetricsService],
 })
 export class MonitoringModule {}
