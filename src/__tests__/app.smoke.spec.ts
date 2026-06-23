@@ -4,6 +4,7 @@ import { TypeOrmHealthIndicator } from '@nestjs/terminus';
 import request from 'supertest';
 import { AppModule } from '../app.module';
 import { CorsOriginsCacheService } from '../middleware/cors-origins-cache.service';
+import { PaymentDetectorService } from '../payments/payment-detector.service';
 import { RedisService } from '../redis/redis.service';
 
 jest.mock('@nestjs/typeorm', () => {
@@ -24,6 +25,15 @@ describe('App smoke test', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    const redisClient = {
+      get: jest.fn().mockResolvedValue(null),
+      lrange: jest.fn().mockResolvedValue([]),
+      set: jest.fn().mockResolvedValue('OK'),
+      expire: jest.fn().mockResolvedValue(1),
+      del: jest.fn().mockResolvedValue(1),
+      quit: jest.fn().mockResolvedValue('OK'),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
@@ -37,7 +47,14 @@ describe('App smoke test', () => {
       })
       .overrideProvider(RedisService)
       .useValue({
-        getClient: jest.fn(),
+        getClient: jest.fn(() => redisClient),
+        onModuleInit: jest.fn(),
+        onModuleDestroy: jest.fn(),
+      })
+      .overrideProvider(PaymentDetectorService)
+      .useValue({
+        onModuleInit: jest.fn(),
+        onModuleDestroy: jest.fn(),
       })
       .overrideProvider(CorsOriginsCacheService)
       .useValue({
