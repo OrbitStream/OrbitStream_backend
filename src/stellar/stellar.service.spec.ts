@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { StellarService } from './stellar.service';
 import axios from 'axios';
 
@@ -39,7 +40,16 @@ describe('StellarService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [StellarService],
+      providers: [
+        StellarService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: (key: string) =>
+              key === 'STELLAR_HORIZON_URL' ? 'https://horizon-testnet.stellar.org' : undefined,
+          },
+        },
+      ],
     }).compile();
     service = module.get(StellarService);
   });

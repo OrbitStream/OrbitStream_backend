@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { RedisService } from '../redis/redis.service';
@@ -35,20 +36,22 @@ describe('AuthService', () => {
     expire: jest.fn(),
   };
 
-  beforeAll(() => {
-    process.env.STELLAR_PLATFORM_SECRET_KEY = mockServerKeypair.secret();
-    process.env.CHALLENGE_TTL_SECONDS = '300';
-  });
-
-  afterAll(() => {
-    delete process.env.STELLAR_PLATFORM_SECRET_KEY;
-    delete process.env.CHALLENGE_TTL_SECONDS;
-  });
-
   beforeEach(async () => {
     jest.clearAllMocks();
 
     mockRedisClient.incr.mockResolvedValue(1); // rate limit
+
+    const mockConfigService = {
+      get: (key: string) => {
+        const values: Record<string, unknown> = {
+          STELLAR_PLATFORM_SECRET_KEY: mockServerKeypair.secret(),
+          CHALLENGE_TTL_SECONDS: 300,
+          STELLAR_NETWORK: 'testnet',
+          STELLAR_HORIZON_URL: 'https://horizon-testnet.stellar.org',
+        };
+        return values[key];
+      },
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,6 +63,10 @@ describe('AuthService', () => {
         {
           provide: RedisService,
           useValue: { getClient: () => mockRedisClient },
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { CheckoutService } from './checkout.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -15,6 +16,12 @@ jest.mock('../db/index', () => ({
 
 import { db } from '../db/index';
 
+const FRONTEND_URL = 'https://checkout.example.com';
+const RECEIVING_ACCOUNT = 'GTESTACCOUNT123456789012345678901234567890123456789012345';
+
+const mockConfigGet = jest.fn();
+const mockConfigService = { get: mockConfigGet };
+
 describe('CheckoutService', () => {
   let service: CheckoutService;
 
@@ -27,12 +34,21 @@ describe('CheckoutService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    process.env.FRONTEND_URL = 'https://checkout.example.com';
-    process.env.PLATFORM_RECEIVING_ACCOUNT =
-      'GTESTACCOUNT123456789012345678901234567890123456789012345';
+    mockConfigGet.mockImplementation((key: string) => {
+      const values: Record<string, unknown> = {
+        FRONTEND_URL,
+        PLATFORM_RECEIVING_ACCOUNT: RECEIVING_ACCOUNT,
+        CHECKOUT_SESSION_TTL_MINUTES: 30,
+      };
+      return values[key];
+    });
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [CheckoutService, { provide: AuditService, useValue: mockAuditService }],
+      providers: [
+        CheckoutService,
+        { provide: AuditService, useValue: mockAuditService },
+        { provide: ConfigService, useValue: mockConfigService },
+      ],
     }).compile();
 
     service = module.get<CheckoutService>(CheckoutService);
@@ -60,7 +76,7 @@ describe('CheckoutService', () => {
 
       expect(result).toEqual({
         id: 'sess-1',
-        url: 'https://checkout.example.com/checkout/sess-1',
+        url: `${FRONTEND_URL}/checkout/sess-1`,
         amount: '10.0000000',
         asset: 'USDC',
         status: 'pending',
@@ -138,16 +154,18 @@ describe('CheckoutService', () => {
     });
 
     it('should throw BadRequestException when PLATFORM_RECEIVING_ACCOUNT is not set', async () => {
-      delete process.env.PLATFORM_RECEIVING_ACCOUNT;
+      mockConfigGet.mockImplementation((key: string) => {
+        if (key === 'PLATFORM_RECEIVING_ACCOUNT') return undefined;
+        const values: Record<string, unknown> = {
+          FRONTEND_URL,
+          CHECKOUT_SESSION_TTL_MINUTES: 30,
+        };
+        return values[key];
+      });
 
       await expect(
         service.createSession('merchant-1', { amount: 10, asset: 'USDC' }),
       ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should restore PLATFORM_RECEIVING_ACCOUNT after the test', () => {
-      process.env.PLATFORM_RECEIVING_ACCOUNT =
-        'GTESTACCOUNT123456789012345678901234567890123456789012345';
     });
   });
 
