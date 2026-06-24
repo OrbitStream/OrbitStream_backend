@@ -122,6 +122,7 @@ describe('CheckoutService', () => {
     });
   });
 
+
   describe('createSession', () => {
     const mockSession = {
       id: 'sess-new',
@@ -194,6 +195,7 @@ describe('CheckoutService', () => {
       expect(db.update).toHaveBeenCalled();
     });
   });
+
 
   describe('cancelSession', () => {
     it('should log sensitive operation on cancel', async () => {
