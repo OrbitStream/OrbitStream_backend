@@ -1,8 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { db } from '../db/index';
 import { webhookDeadLetters, webhookDeliveries, merchants } from '../db/schema';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, gte, lte } from 'drizzle-orm';
 import { WebhookQueueService } from './webhook-queue.service';
+
+export interface ListDeliveriesOptions {
+  limit?: number;
+  event?: string;
+  status?: string;
+  after?: Date;
+  before?: Date;
+}
 
 @Injectable()
 export class WebhookService {
@@ -27,12 +35,30 @@ export class WebhookService {
     await this.queue.enqueue({ merchantId, event, body: data, sessionId });
   }
 
-  /** Recent delivery records for a merchant (most recent first). */
-  async listDeliveries(merchantId: string, limit = 50) {
+  /** Recent delivery records for a merchant with optional filtering. */
+  async listDeliveries(merchantId: string, options: ListDeliveriesOptions = {}) {
+    const { limit = 50, event, status, after, before } = options;
+
+    const conditions = [eq(webhookDeliveries.merchantId, merchantId)];
+    if (event) conditions.push(eq(webhookDeliveries.event, event));
+    if (status) conditions.push(eq(webhookDeliveries.status, status as any));
+    if (after) conditions.push(gte(webhookDeliveries.createdAt, after));
+    if (before) conditions.push(lte(webhookDeliveries.createdAt, before));
+
     return db.query.webhookDeliveries.findMany({
-      where: eq(webhookDeliveries.merchantId, merchantId),
+      where: and(...conditions),
       orderBy: [desc(webhookDeliveries.createdAt)],
-      limit,
+      limit: Math.min(limit, 100),
+    });
+  }
+
+  /** Single delivery record with full attempt log. */
+  async getDelivery(merchantId: string, deliveryId: string) {
+    return db.query.webhookDeliveries.findFirst({
+      where: and(
+        eq(webhookDeliveries.merchantId, merchantId),
+        eq(webhookDeliveries.deliveryId, deliveryId),
+      ),
     });
   }
 
