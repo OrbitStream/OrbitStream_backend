@@ -28,6 +28,8 @@ interface PaidWithoutPaymentRow {
   merchant_id: string;
   amount: string;
   asset_code: string;
+  memo: string | null;
+  receiving_account: string;
 }
 
 interface PendingWithPaymentRow {
@@ -143,7 +145,7 @@ export class PaymentRecoveryService {
   }
 
   /** Searches the receiving account's recent Horizon payments for one matching this session. */
-  private async findConfirmingPayment(row: StuckProcessingRow): Promise<any | null> {
+  private async findConfirmingPayment(row: StuckProcessingRow | PaidWithoutPaymentRow): Promise<any | null> {
     const records = await this.stellar.getPaymentsForAccount(
       row.receiving_account,
       undefined,
@@ -242,9 +244,16 @@ export class PaymentRecoveryService {
     }
   }
 
+  /**
+   * Sessions marked 'paid' with no corresponding payment record indicate the
+   * payment insert in phase 2 was lost (e.g. the process died after committing
+   * the status update). For each orphan, query Horizon to find the confirming
+   * transaction and back-fill the missing payment row. If no confirming payment
+   * can be found, the session is left in 'paid' and logged for manual review.
+   */
   private async recoverPaidWithoutPayments(): Promise<void> {
     const paidOrphans = (await db.execute(sql`
-      SELECT cs.id, cs.merchant_id, cs.amount, cs.asset_code
+      SELECT cs.id, cs.merchant_id, cs.amount, cs.asset_code, cs.memo, cs.receiving_account
       FROM checkout_sessions cs
       LEFT JOIN payments p ON p.session_id = cs.id
       WHERE cs.status = 'paid' AND p.id IS NULL
@@ -253,13 +262,48 @@ export class PaymentRecoveryService {
     if (!paidOrphans.length) return;
 
     this.logger.warn(
-      `Found ${paidOrphans.length} paid session(s) without payment records — logging for manual review`,
+      `Found ${paidOrphans.length} paid session(s) without payment records — querying Horizon to recover`,
     );
 
     for (const row of paidOrphans) {
-      this.logger.warn(
-        `Paid session ${row.id} (merchant ${row.merchant_id}) has no payment record — requires manual investigation`,
-      );
+      try {
+        const match = row.memo ? await this.findConfirmingPayment(row) : null;
+
+        if (!match) {
+          this.logger.warn(
+            `Paid session ${row.id} (merchant ${row.merchant_id}) — no matching Horizon payment found; requires manual investigation`,
+          );
+          continue;
+        }
+
+        const confirmed = await this.stellar.verifyTransaction(match.transaction_hash);
+        if (!confirmed) {
+          this.logger.warn(
+            `Paid session ${row.id} — Horizon tx ${match.transaction_hash} is not successful; requires manual investigation`,
+          );
+          continue;
+        }
+
+        await db
+          .insert(payments)
+          .values({
+            sessionId: row.id,
+            merchantId: row.merchant_id,
+            txHash: match.transaction_hash,
+            amount: match.amount,
+            assetCode: match.asset_code ?? 'XLM',
+            assetIssuer: match.asset_issuer ?? null,
+            senderAddress: match.from,
+            confirmedAt: new Date(),
+          } as any)
+          .onConflictDoNothing({ target: [payments.txHash, payments.sessionId] });
+
+        this.logger.log(
+          `Back-filled payment record for session ${row.id} — Horizon tx ${match.transaction_hash}`,
+        );
+      } catch (err) {
+        this.logger.error(`Failed to recover paid session ${row.id}`, err as Error);
+      }
     }
   }
 }
