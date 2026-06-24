@@ -222,5 +222,40 @@ describe('CheckoutService', () => {
         }),
       );
     });
+
+    it('should throw NotFoundException when session does not belong to merchant', async () => {
+      (db.query.checkoutSessions.findFirst as jest.Mock).mockResolvedValue(undefined);
+
+      await expect(service.cancelSession('sess-other', 'merchant-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw BadRequestException when session is not pending', async () => {
+      (db.query.checkoutSessions.findFirst as jest.Mock).mockResolvedValue({
+        id: 'sess-paid',
+        merchantId: 'merchant-1',
+        status: 'paid',
+      });
+
+      await expect(service.cancelSession('sess-paid', 'merchant-1')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+  });
+
+  describe('markAsPaid', () => {
+    it('should update session status to "paid"', async () => {
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([{ id: 'sess-1', status: 'paid' }]),
+          }),
+        }),
+      });
+
+      const result = await service.markAsPaid('sess-1');
+      expect(result).toMatchObject({ id: 'sess-1', status: 'paid' });
+    });
   });
 });
