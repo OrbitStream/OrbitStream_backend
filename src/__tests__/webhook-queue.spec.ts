@@ -70,8 +70,11 @@ jest.mock('../db/index', () => {
 });
 
 import RedisMock from 'ioredis-mock';
+import { ConfigService } from '@nestjs/config';
 import { WebhookQueueService } from '../webhook/webhook-queue.service';
 import { RedisService } from '../redis/redis.service';
+
+const mockConfigService = { get: () => undefined } as unknown as ConfigService;
 
 const sharedMock = new RedisMock();
 const redisService = { getClient: () => sharedMock } as unknown as RedisService;
@@ -129,7 +132,7 @@ describe('WebhookQueueService', () => {
     s.deliveries.length = 0;
     s.deadLetters.length = 0;
     delivery = makeDelivery();
-    svc = new WebhookQueueService(redisService, delivery as any);
+    svc = new WebhookQueueService(redisService, delivery as any, mockConfigService);
   });
 
   describe('priority ordering', () => {

@@ -1,16 +1,24 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { db } from '../db/index';
 import { checkoutSessions } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { AuditService } from '../audit/audit.service';
+import { Config } from '../config/config.schema';
 
 @Injectable()
 export class CheckoutService {
-  private readonly frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
-  private readonly sessionTtlMinutes = Number(process.env.CHECKOUT_SESSION_TTL_MINUTES ?? 30);
+  private readonly frontendUrl: string;
+  private readonly sessionTtlMinutes: number;
 
-  constructor(private readonly auditService: AuditService) {}
+  constructor(
+    private readonly auditService: AuditService,
+    private readonly config: ConfigService<Config>,
+  ) {
+    this.frontendUrl = this.config.get('FRONTEND_URL', { infer: true }) ?? 'http://localhost:3000';
+    this.sessionTtlMinutes = this.config.get('CHECKOUT_SESSION_TTL_MINUTES', { infer: true }) ?? 30;
+  }
 
   async createSession(
     merchantId: string,
@@ -24,7 +32,7 @@ export class CheckoutService {
     },
   ) {
     const memo = crypto.randomBytes(8).toString('hex');
-    const receivingAccount = process.env.PLATFORM_RECEIVING_ACCOUNT;
+    const receivingAccount = this.config.get('PLATFORM_RECEIVING_ACCOUNT', { infer: true });
     if (!receivingAccount) {
       throw new BadRequestException('Platform receiving account not configured');
     }

@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { DynamicCorsMiddleware } from './dynamic-cors.middleware';
 import { CorsOriginsCacheService } from './cors-origins-cache.service';
 
@@ -33,7 +34,6 @@ describe('DynamicCorsMiddleware - route grouping', () => {
   let cache: jest.Mocked<CorsOriginsCacheService>;
 
   beforeEach(() => {
-    process.env.PLATFORM_DOMAIN = 'http://localhost:3001';
     cache = {
       getAllMerchantOrigins: jest.fn().mockResolvedValue(['https://myshop.com']),
       getMerchantOrigins: jest.fn().mockResolvedValue([] as string[]),
@@ -41,7 +41,10 @@ describe('DynamicCorsMiddleware - route grouping', () => {
       refreshCache: jest.fn(),
       invalidateAllCache: jest.fn(),
     } as any;
-    middleware = new DynamicCorsMiddleware(cache);
+    const mockConfig = {
+      get: (key: string) => (key === 'PLATFORM_DOMAIN' ? 'http://localhost:3001' : undefined),
+    } as unknown as ConfigService;
+    middleware = new DynamicCorsMiddleware(cache, mockConfig);
   });
 
   it('allows all origins on public GET /v1/checkout/sessions/:id', async () => {

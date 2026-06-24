@@ -1,6 +1,8 @@
 import { Injectable, NestMiddleware, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request, Response, NextFunction } from 'express';
 import { CorsOriginsCacheService } from './cors-origins-cache.service';
+import { Config } from '../config/config.schema';
 
 type RouteGroup = 'public' | 'merchant_api' | 'dashboard';
 
@@ -30,8 +32,11 @@ export class DynamicCorsMiddleware implements NestMiddleware {
   private readonly logger = new Logger(DynamicCorsMiddleware.name);
   private readonly platformOrigin: string;
 
-  constructor(private readonly corsCache: CorsOriginsCacheService) {
-    const domain = process.env.PLATFORM_DOMAIN ?? 'http://localhost:3001';
+  constructor(
+    private readonly corsCache: CorsOriginsCacheService,
+    private readonly config: ConfigService<Config>,
+  ) {
+    const domain = this.config.get('PLATFORM_DOMAIN', { infer: true }) ?? 'http://localhost:3001';
     this.platformOrigin = new URL(domain).origin;
   }
 

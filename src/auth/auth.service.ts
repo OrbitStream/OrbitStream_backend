@@ -6,18 +6,20 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { RequestChallengeDto, VerifyChallengeDto } from './auth.dto';
 import { RedisService } from '../redis/redis.service';
+import { Config } from '../config/config.schema';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import * as crypto from 'crypto';
 import axios from 'axios';
 
-const CHALLENGE_TTL_SECONDS = parseInt(process.env.CHALLENGE_TTL_SECONDS || '300', 10);
 const NONCE_BYTES = 32;
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly challengeTtlSeconds: number;
 
   // Circuit breaker state
   private horizonFailureCount = 0;
@@ -26,21 +28,33 @@ export class AuthService {
   constructor(
     private readonly jwt: JwtService,
     private readonly redisService: RedisService,
-  ) {}
+    private readonly config: ConfigService<Config>,
+  ) {
+    this.challengeTtlSeconds = this.config.get('CHALLENGE_TTL_SECONDS', { infer: true }) ?? 300;
+  }
 
   private getNetworkConfig() {
-    const network = (process.env.STELLAR_NETWORK || 'TESTNET').toUpperCase();
+    const network = (
+      this.config.get('STELLAR_NETWORK', { infer: true }) ?? 'testnet'
+    ).toUpperCase();
+    const horizonUrl =
+      this.config.get('STELLAR_HORIZON_URL', { infer: true }) ??
+      'https://horizon-testnet.stellar.org';
     if (network === 'MAINNET') {
       return {
         passphrase: StellarSdk.Networks.PUBLIC,
-        horizonUrl: process.env.STELLAR_HORIZON_URL || 'https://horizon.stellar.org',
-        secret: process.env.MAINNET_AUTH_SECRET_KEY || process.env.STELLAR_PLATFORM_SECRET_KEY,
+        horizonUrl,
+        secret:
+          this.config.get('MAINNET_AUTH_SECRET_KEY', { infer: true }) ||
+          this.config.get('STELLAR_PLATFORM_SECRET_KEY', { infer: true }),
       };
     }
     return {
       passphrase: StellarSdk.Networks.TESTNET,
-      horizonUrl: process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org',
-      secret: process.env.TESTNET_AUTH_SECRET_KEY || process.env.STELLAR_PLATFORM_SECRET_KEY,
+      horizonUrl,
+      secret:
+        this.config.get('TESTNET_AUTH_SECRET_KEY', { infer: true }) ||
+        this.config.get('STELLAR_PLATFORM_SECRET_KEY', { infer: true }),
     };
   }
 
@@ -130,8 +144,8 @@ export class AuthService {
 
     const nowSeconds = Math.floor(Date.now() / 1000);
     const timebounds = {
-      minTime: (nowSeconds - CHALLENGE_TTL_SECONDS).toString(),
-      maxTime: (nowSeconds + CHALLENGE_TTL_SECONDS).toString(),
+      minTime: (nowSeconds - this.challengeTtlSeconds).toString(),
+      maxTime: (nowSeconds + this.challengeTtlSeconds).toString(),
     };
 
     const transaction = new StellarSdk.TransactionBuilder(serverAccount, {
@@ -153,12 +167,12 @@ export class AuthService {
     const txEnvelope = transaction.toEnvelope().toXDR('base64');
 
     const redis = this.redisService.getClient();
-    await redis.set(`challenge:${walletAddress}`, nonce, 'EX', CHALLENGE_TTL_SECONDS);
+    await redis.set(`challenge:${walletAddress}`, nonce, 'EX', this.challengeTtlSeconds);
 
     return {
       transaction: txEnvelope,
       passphrase: config.passphrase,
-      expiresAt: new Date((nowSeconds + CHALLENGE_TTL_SECONDS) * 1000).toISOString(),
+      expiresAt: new Date((nowSeconds + this.challengeTtlSeconds) * 1000).toISOString(),
     };
   }
 
