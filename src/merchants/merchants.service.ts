@@ -148,4 +148,12 @@ export class MerchantsService {
     await this.corsCache.invalidateMerchantCache(merchantId);
     return (updated.corsOrigins ?? []) as string[];
   }
+
+  async deleteCorsOrigin(merchantId: string, origin: string): Promise<boolean> {
+    const current = await this.getCorsOrigins(merchantId);
+    const filtered = current.filter((o: string) => o !== origin);
+    if (filtered.length === current.length) return false;
+    await this.setCorsOrigins(merchantId, filtered);
+    return true;
+  }
 }
