@@ -9,6 +9,7 @@ jest.mock('../db/index', () => ({
 jest.mock('../db/schema', () => ({ checkoutSessions: {}, payments: {} }));
 
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { PaymentDetectorService } from '../payments/payment-detector.service';
 import { PaymentCursorService } from '../payments/payment-cursor.service';
 import { StellarService } from '../stellar/stellar.service';
@@ -58,6 +59,10 @@ describe('PaymentDetectorService — rate-limit backoff', () => {
             updateCursor: jest.fn().mockResolvedValue(true),
             appendCheckpoint: jest.fn(),
           },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: () => undefined },
         },
       ],
     }).compile();
