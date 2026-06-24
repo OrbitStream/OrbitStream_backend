@@ -128,9 +128,7 @@ describe('Checkout session lifecycle (integration)', () => {
 
   describe('GET /v1/checkout/sessions/:id — get session status', () => {
     it('returns 200 with public session fields', async () => {
-      const res = await request(app.getHttpServer()).get(
-        `/v1/checkout/sessions/${stubSession.id}`,
-      );
+      const res = await request(app.getHttpServer()).get(`/v1/checkout/sessions/${stubSession.id}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ id: stubSession.id, status: 'pending' });

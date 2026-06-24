@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { StellarService } from './stellar.service';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 
 jest.mock('axios', () => {
   const mockAxios: any = jest.fn();
