@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { PaymentDetectorService } from '../payments/payment-detector.service';
 import { PaymentCursorService } from '../payments/payment-cursor.service';
 import { StellarService } from '../stellar/stellar.service';
@@ -116,7 +117,14 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
       releaseLock: jest.fn(),
     } as any;
 
-    service = new PaymentDetectorService(mockStellar, mockWebhooks, mockMetrics, mockCursorService);
+    const mockConfig = { get: () => undefined } as unknown as ConfigService;
+    service = new PaymentDetectorService(
+      mockStellar,
+      mockWebhooks,
+      mockMetrics,
+      mockCursorService,
+      mockConfig,
+    );
   });
 
   describe('two-phase claim + finalize', () => {
