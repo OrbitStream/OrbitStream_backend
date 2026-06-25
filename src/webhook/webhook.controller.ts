@@ -30,9 +30,31 @@ export class WebhookController {
 
   /** List recent webhook deliveries for the authenticated merchant. */
   @Get('deliveries')
-  async listDeliveries(@Request() req: any, @Query('limit') limit?: string) {
+  async listDeliveries(
+    @Request() req: any,
+    @Query('limit') limit?: string,
+    @Query('event') event?: string,
+    @Query('status') status?: string,
+    @Query('after') after?: string,
+    @Query('before') before?: string,
+  ) {
     const merchantId = await this.merchantId(req);
-    return this.webhooks.listDeliveries(merchantId, this.clampLimit(limit));
+    return this.webhooks.listDeliveries(merchantId, {
+      limit: this.clampLimit(limit),
+      event,
+      status,
+      after: after ? new Date(after) : undefined,
+      before: before ? new Date(before) : undefined,
+    });
+  }
+
+  /** Get a single delivery record by its delivery ID, including full attempt log. */
+  @Get('deliveries/:id')
+  async getDelivery(@Request() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const merchantId = await this.merchantId(req);
+    const delivery = await this.webhooks.getDelivery(merchantId, id);
+    if (!delivery) throw new NotFoundException('Delivery not found');
+    return delivery;
   }
 
   /** Bound a client-supplied limit to a sane [1, 100] range (default 50). */
