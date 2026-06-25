@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import axios, { AxiosError } from 'axios';
+import { Config } from '../config/config.schema';
 
 export interface PaymentsPage {
   records: any[];
@@ -11,7 +13,13 @@ export interface PaymentsPage {
 @Injectable()
 export class StellarService {
   private readonly logger = new Logger(StellarService.name);
-  readonly horizonUrl = process.env.STELLAR_HORIZON_URL ?? 'https://horizon-testnet.stellar.org';
+  readonly horizonUrl: string;
+
+  constructor(private readonly config: ConfigService<Config>) {
+    this.horizonUrl =
+      this.config.get('STELLAR_HORIZON_URL', { infer: true }) ??
+      'https://horizon-testnet.stellar.org';
+  }
 
   async getAccountInfo(walletAddress: string) {
     const { data } = await axios.get(`${this.horizonUrl}/accounts/${walletAddress}`);

@@ -1,4 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
@@ -7,6 +8,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { PaymentCursorService, PERSIST_EVERY } from './payment-cursor.service';
+import { Config } from '../config/config.schema';
 
 interface LockedSessionRow {
   id: string;
@@ -40,10 +42,11 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
     private readonly webhooks: WebhookService,
     private readonly metrics: MetricsService,
     private readonly cursorService: PaymentCursorService,
+    private readonly config: ConfigService<Config>,
   ) {}
 
   async onModuleInit(): Promise<void> {
-    const account = process.env.PLATFORM_RECEIVING_ACCOUNT;
+    const account = this.config.get('PLATFORM_RECEIVING_ACCOUNT', { infer: true });
     if (!account) {
       this.logger.warn('PLATFORM_RECEIVING_ACCOUNT not set — payment detection disabled');
       return;
@@ -55,7 +58,7 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     this.polling = false;
-    const account = process.env.PLATFORM_RECEIVING_ACCOUNT;
+    const account = this.config.get('PLATFORM_RECEIVING_ACCOUNT', { infer: true });
     if (account) await this.cursorService.releaseLock(account, this.instanceId);
   }
 

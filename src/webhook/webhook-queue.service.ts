@@ -1,4 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Config } from '../config/config.schema';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index';
@@ -56,8 +58,8 @@ type AttemptLogEntry = import('../db/schema').WebhookDeliveryAttempt;
 export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WebhookQueueService.name);
 
-  private readonly pollMs = Number(process.env.WEBHOOK_POLL_MS ?? 250);
-  private maxConcurrency = Number(process.env.WEBHOOK_MAX_CONCURRENCY ?? 100);
+  private readonly pollMs: number;
+  private maxConcurrency: number;
 
   private timer: NodeJS.Timeout | null = null;
   private ticking = false;
@@ -70,10 +72,15 @@ export class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly redis: RedisService,
     private readonly delivery: WebhookDeliveryService,
-  ) {}
+    private readonly config: ConfigService<Config>,
+  ) {
+    this.pollMs = this.config.get('WEBHOOK_POLL_MS', { infer: true }) ?? 250;
+    this.maxConcurrency = this.config.get('WEBHOOK_MAX_CONCURRENCY', { infer: true }) ?? 100;
+  }
 
   onModuleInit(): void {
-    if (process.env.NODE_ENV === 'test' || process.env.WEBHOOK_WORKER_DISABLED === 'true') {
+    const workerDisabled = this.config.get('WEBHOOK_WORKER_DISABLED', { infer: true });
+    if (process.env.NODE_ENV === 'test' || workerDisabled === 'true') {
       this.logger.log('Webhook worker auto-start disabled');
       return;
     }
