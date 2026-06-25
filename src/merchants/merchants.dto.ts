@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsUrl,
   IsArray,
+  ArrayMaxSize,
   Matches,
   MaxLength,
   ValidateIf,
@@ -56,6 +57,11 @@ export class GenerateApiKeyDto {
 
 export class SetCorsOriginsDto {
   @IsArray()
-  @IsUrl({}, { each: true })
+  @ArrayMaxSize(10, { message: 'A maximum of 10 CORS origins are allowed per merchant' })
+  @IsUrl(
+    { protocols: ['https'], require_protocol: true, allow_localhost: false },
+    { each: true, message: 'Each origin must be a valid HTTPS URL without localhost' },
+  )
+  @Matches(/^[^*]+$/, { each: true, message: 'Wildcard origins are not permitted' })
   origins: string[];
 }

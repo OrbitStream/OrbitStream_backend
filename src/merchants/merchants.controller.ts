@@ -9,6 +9,7 @@ import {
   Param,
   UseGuards,
   Request,
+  NotFoundException,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { MerchantsService } from './merchants.service';
@@ -99,5 +100,15 @@ export class MerchantsController {
       if (!m) throw new Error('Merchant not found');
       return this.merchants.setCorsOrigins(m.id, dto.origins);
     });
+  }
+
+  @Delete('me/cors/:origin')
+  @Roles('admin', 'merchant')
+  async deleteCorsOrigin(@Request() req: any, @Param('origin') origin: string) {
+    const m = await this.merchants.findByWallet(req.user.walletAddress);
+    if (!m) throw new NotFoundException('Merchant not found');
+    const removed = await this.merchants.deleteCorsOrigin(m.id, decodeURIComponent(origin));
+    if (!removed) throw new NotFoundException('Origin not found in configured list');
+    return { origins: await this.merchants.getCorsOrigins(m.id) };
   }
 }
