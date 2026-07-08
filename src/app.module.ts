@@ -1,5 +1,4 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from './auth/auth.module';
 import { MerchantsModule } from './merchants/merchants.module';
@@ -12,6 +11,7 @@ import { RedisModule } from './redis/redis.module';
 import { RateLimitModule } from './api/middleware/rate-limit.module';
 import { AuditModule } from './audit/audit.module';
 import { ConfigModule } from './config/config.module';
+import { PaymentLinksModule } from './payment-links/payment-links.module';
 import { DynamicCorsMiddleware } from './middleware/dynamic-cors.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 
@@ -19,12 +19,6 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
   imports: [
     ConfigModule,
     ScheduleModule.forRoot(),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      url: process.env.DATABASE_URL,
-      autoLoadEntities: true,
-      synchronize: process.env.NODE_ENV !== 'production',
-    }),
     RedisModule,
     RateLimitModule,
     AuditModule,
@@ -32,6 +26,7 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
     MerchantsModule,
     CheckoutModule,
     PaymentsModule,
+    PaymentLinksModule,
     StellarModule,
     WebhookModule,
     MonitoringModule,

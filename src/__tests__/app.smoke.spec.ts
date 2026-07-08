@@ -1,25 +1,19 @@
 import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmHealthIndicator } from '@nestjs/terminus';
 import request from 'supertest';
 import { AppModule } from '../app.module';
 import { CorsOriginsCacheService } from '../middleware/cors-origins-cache.service';
 import { PaymentDetectorService } from '../payments/payment-detector.service';
 import { RedisService } from '../redis/redis.service';
 
-jest.mock('@nestjs/typeorm', () => {
-  const actual = jest.requireActual('@nestjs/typeorm');
-
-  return {
-    ...actual,
-    TypeOrmModule: {
-      ...actual.TypeOrmModule,
-      forRoot: jest.fn(() => ({
-        module: class MockTypeOrmModule {},
-      })),
-    },
-  };
-});
+jest.mock('../db/index', () => ({
+  db: {
+    execute: jest.fn().mockResolvedValue([]),
+    query: {},
+  },
+  client: {},
+  schema: {},
+}));
 
 describe('App smoke test', () => {
   let app: INestApplication;
@@ -37,14 +31,6 @@ describe('App smoke test', () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
-      .overrideProvider(TypeOrmHealthIndicator)
-      .useValue({
-        pingCheck: jest.fn().mockResolvedValue({
-          database: {
-            status: 'up',
-          },
-        }),
-      })
       .overrideProvider(RedisService)
       .useValue({
         getClient: jest.fn(() => redisClient),
