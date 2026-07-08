@@ -11,7 +11,6 @@ import { RedisModule } from './redis/redis.module';
 import { RateLimitModule } from './api/middleware/rate-limit.module';
 import { AuditModule } from './audit/audit.module';
 import { ConfigModule } from './config/config.module';
-import { PaymentLinksModule } from './payment-links/payment-links.module';
 import { DynamicCorsMiddleware } from './middleware/dynamic-cors.middleware';
 import { SecurityHeadersMiddleware } from './middleware/security-headers.middleware';
 
@@ -26,7 +25,6 @@ import { SecurityHeadersMiddleware } from './middleware/security-headers.middlew
     MerchantsModule,
     CheckoutModule,
     PaymentsModule,
-    PaymentLinksModule,
     StellarModule,
     WebhookModule,
     MonitoringModule,
