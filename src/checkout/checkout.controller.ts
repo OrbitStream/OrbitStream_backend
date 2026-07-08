@@ -21,6 +21,12 @@ export class CheckoutController {
     return this.checkout.getSession(id);
   }
 
+  @UseGuards(ApiKeyGuard)
+  @Get('sessions/:id/payment')
+  getSessionPayment(@Param('id') id: string) {
+    return this.checkout.getSessionPayment(id);
+  }
+
   @UseGuards(ApiKeyGuard, RolesGuard, ResourceOwnershipGuard)
   @Roles('admin', 'merchant')
   @ResourceOwner('checkout_session')
