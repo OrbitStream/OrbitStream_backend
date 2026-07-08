@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Body,
   Query,
   Request,
   UseGuards,
@@ -13,57 +14,89 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { WebhookService } from './webhook.service';
 import { MerchantsService } from '../merchants/merchants.service';
+import { ApiKeyGuard } from '../auth/api-key.guard';
+import { IsArray, IsString, IsUrl } from 'class-validator';
+
+class CreateWebhookEndpointDto {
+  @IsUrl({}, { message: 'Invalid URL format' })
+  url: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  events: string[];
+}
 
 @Controller('v1/webhooks')
-@UseGuards(AuthGuard('jwt'))
 export class WebhookController {
   constructor(
     private readonly webhooks: WebhookService,
     private readonly merchants: MerchantsService,
   ) {}
 
-  private async merchantId(req: any): Promise<string> {
+  private async merchantIdFromJwt(req: any): Promise<string> {
     const merchant = await this.merchants.findByWallet(req.user.walletAddress);
     if (!merchant) throw new NotFoundException('Merchant not found');
     return merchant.id;
   }
 
-  /** List recent webhook deliveries for the authenticated merchant. */
+  // ── SDK-facing endpoints (API key auth) ──
+
+  @UseGuards(ApiKeyGuard)
+  @Post()
+  async createEndpoint(@Request() req: any, @Body() dto: CreateWebhookEndpointDto) {
+    return this.webhooks.createEndpoint(req.merchantId, dto.url, dto.events);
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @Get()
+  async listEndpoints(@Request() req: any) {
+    return this.webhooks.listEndpoints(req.merchantId);
+  }
+
+  // ── Dashboard-facing endpoints (JWT auth) ──
+
+  @UseGuards(AuthGuard('jwt'))
   @Get('deliveries')
   async listDeliveries(@Request() req: any, @Query('limit') limit?: string) {
-    const merchantId = await this.merchantId(req);
+    const merchantId = await this.merchantIdFromJwt(req);
     return this.webhooks.listDeliveries(merchantId, this.clampLimit(limit));
   }
 
-  /** Bound a client-supplied limit to a sane [1, 100] range (default 50). */
   private clampLimit(limit?: string): number {
     const n = Number(limit);
     if (!Number.isFinite(n) || n <= 0) return 50;
     return Math.min(Math.floor(n), 100);
   }
 
-  /** List dead-letter entries for the authenticated merchant. */
+  @UseGuards(AuthGuard('jwt'))
   @Get('dead-letter')
   async listDeadLetter(@Request() req: any) {
-    const merchantId = await this.merchantId(req);
+    const merchantId = await this.merchantIdFromJwt(req);
     return this.webhooks.listDeadLetters(merchantId);
   }
 
-  /** Manually retry a dead-letter entry. */
+  @UseGuards(AuthGuard('jwt'))
   @Post('dead-letter/:id/retry')
   async retryDeadLetter(@Request() req: any, @Param('id', ParseUUIDPipe) id: string) {
-    const merchantId = await this.merchantId(req);
+    const merchantId = await this.merchantIdFromJwt(req);
     const result = await this.webhooks.retryDeadLetter(merchantId, id);
     if (!result) throw new NotFoundException('Dead-letter entry not found');
     return { status: 'requeued', ...result };
   }
 
-  /** Dismiss (delete) a dead-letter entry. */
+  @UseGuards(AuthGuard('jwt'))
   @Delete('dead-letter/:id')
   async dismissDeadLetter(@Request() req: any, @Param('id', ParseUUIDPipe) id: string) {
-    const merchantId = await this.merchantId(req);
+    const merchantId = await this.merchantIdFromJwt(req);
     const ok = await this.webhooks.dismissDeadLetter(merchantId, id);
     if (!ok) throw new NotFoundException('Dead-letter entry not found');
     return { status: 'dismissed' };
+  }
+
+  @UseGuards(ApiKeyGuard)
+  @Delete(':id')
+  async deleteEndpoint(@Request() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const ok = await this.webhooks.deleteEndpoint(req.merchantId, id);
+    if (!ok) throw new NotFoundException('Webhook endpoint not found');
   }
 }
