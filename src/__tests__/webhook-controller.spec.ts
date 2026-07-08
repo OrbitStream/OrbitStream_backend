@@ -17,12 +17,10 @@ function build() {
 }
 
 describe('WebhookController', () => {
-  it('dashboard endpoints are JWT-guarded individually', () => {
-    const deliveryGuards = Reflect.getMetadata(
-      '__guards__',
-      WebhookController.prototype.listDeliveries,
-    );
-    expect(deliveryGuards).toBeDefined();
+  it('is JWT-guarded at the class level', () => {
+    const guards = Reflect.getMetadata('__guards__', WebhookController);
+    expect(guards).toBeDefined();
+    expect(guards).toHaveLength(1);
   });
 
   describe('merchant scoping', () => {
