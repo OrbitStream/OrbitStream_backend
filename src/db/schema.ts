@@ -152,6 +152,34 @@ export const webhookDeadLetters = pgTable('webhook_dead_letters', {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const webhookEndpoints = pgTable('webhook_endpoints', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  events: jsonb('events').notNull().default([]),
+  secret: text('secret').notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const paymentLinks = pgTable('payment_links', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  merchantId: uuid('merchant_id')
+    .notNull()
+    .references(() => merchants.id, { onDelete: 'cascade' }),
+  amount: numeric('amount', { precision: 36, scale: 7 }).notNull(),
+  assetCode: text('asset_code').notNull(),
+  assetIssuer: text('asset_issuer'),
+  description: text('description'),
+  displayCurrency: text('display_currency'),
+  metadata: jsonb('metadata'),
+  active: boolean('active').notNull().default(true),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const auditLogs = pgTable('audit_logs', {
   id: uuid('id').defaultRandom().primaryKey(),
   merchantId: uuid('merchant_id').references(() => merchants.id),
@@ -171,5 +199,7 @@ export const schema = {
   payments,
   webhookDeliveries,
   webhookDeadLetters,
+  webhookEndpoints,
+  paymentLinks,
   auditLogs,
 };
