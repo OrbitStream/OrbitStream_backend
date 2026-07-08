@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { db } from '../db/index';
-import { checkoutSessions } from '../db/schema';
+import { checkoutSessions, payments } from '../db/schema';
 import { eq, and } from 'drizzle-orm';
 import * as crypto from 'crypto';
 import { AuditService } from '../audit/audit.service';
@@ -128,5 +128,27 @@ export class CheckoutService {
       .where(eq(checkoutSessions.id, sessionId))
       .returning();
     return updated;
+  }
+
+  async getSessionPayment(sessionId: string) {
+    const session = await db.query.checkoutSessions.findFirst({
+      where: eq(checkoutSessions.id, sessionId),
+    });
+    if (!session) throw new NotFoundException('Session not found');
+
+    const payment = await db.query.payments.findFirst({
+      where: eq(payments.sessionId, sessionId),
+    });
+    if (!payment) throw new NotFoundException('Payment not found for session');
+
+    return {
+      id: payment.id,
+      sessionId: payment.sessionId,
+      txHash: payment.txHash,
+      amount: payment.amount,
+      asset: payment.assetCode,
+      sender: payment.senderAddress,
+      confirmedAt: payment.confirmedAt,
+    };
   }
 }
