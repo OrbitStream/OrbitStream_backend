@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { db } from '../db/index';
-import { webhookDeadLetters, webhookDeliveries, merchants } from '../db/schema';
+import { webhookDeadLetters, webhookDeliveries, webhookEndpoints, merchants } from '../db/schema';
 import { and, desc, eq } from 'drizzle-orm';
+import * as crypto from 'crypto';
 import { WebhookQueueService } from './webhook-queue.service';
 
 @Injectable()
@@ -61,5 +62,43 @@ export class WebhookService {
       )
       .returning();
     return !!deleted;
+  }
+
+  // ── Webhook Endpoints CRUD ──
+
+  async createEndpoint(merchantId: string, url: string, events: string[]) {
+    const secret = 'whsec_' + crypto.randomBytes(24).toString('hex');
+    const [endpoint] = await db
+      .insert(webhookEndpoints)
+      .values({ merchantId, url, events, secret } as any)
+      .returning();
+    return this.toEndpointDto(endpoint);
+  }
+
+  async listEndpoints(merchantId: string) {
+    const endpoints = await db.query.webhookEndpoints.findMany({
+      where: eq(webhookEndpoints.merchantId, merchantId),
+      orderBy: [desc(webhookEndpoints.createdAt)],
+    });
+    return endpoints.map((e) => this.toEndpointDto(e));
+  }
+
+  async deleteEndpoint(merchantId: string, endpointId: string): Promise<boolean> {
+    const [deleted] = await db
+      .delete(webhookEndpoints)
+      .where(and(eq(webhookEndpoints.id, endpointId), eq(webhookEndpoints.merchantId, merchantId)))
+      .returning();
+    return !!deleted;
+  }
+
+  private toEndpointDto(endpoint: any) {
+    return {
+      id: endpoint.id,
+      url: endpoint.url,
+      events: endpoint.events,
+      secret: endpoint.secret,
+      active: endpoint.isActive,
+      createdAt: endpoint.createdAt,
+    };
   }
 }
