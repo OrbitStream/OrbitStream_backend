@@ -25,8 +25,10 @@ export class AuditService {
         userAgent: entry.userAgent ?? null,
         details: entry.details ?? null,
       } as any);
-    } catch {
-      // Audit logging should never fail the request
+    } catch (err) {
+      // Audit logging should never fail the request, but log the error
+      // so persistent DB issues are visible.
+      console.warn('[AuditService] Failed to write audit log:', err);
     }
   }
 

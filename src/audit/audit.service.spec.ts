@@ -35,9 +35,12 @@ describe('AuditService', () => {
       expect(db.insert).toHaveBeenCalled();
     });
 
-    it('should not throw on database errors', async () => {
+    it('should not throw on database errors but log a warning', async () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation();
+      const dbError = new Error('DB error');
+
       (db.insert as jest.Mock).mockImplementation(() => ({
-        values: jest.fn().mockRejectedValue(new Error('DB error')),
+        values: jest.fn().mockRejectedValue(dbError),
       }));
 
       await expect(
@@ -46,6 +49,9 @@ describe('AuditService', () => {
           resourceType: 'test',
         }),
       ).resolves.toBeUndefined();
+
+      expect(warnSpy).toHaveBeenCalledWith('[AuditService] Failed to write audit log:', dbError);
+      warnSpy.mockRestore();
     });
   });
 
