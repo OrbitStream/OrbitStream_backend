@@ -14,7 +14,11 @@
 export const MIN_JWT_SECRET_LENGTH = 32;
 
 /** Values that must never be used as a real secret. */
-export const INSECURE_JWT_SECRETS = ['dev-secret', 'change-me-in-production'];
+export const INSECURE_JWT_SECRETS = [
+  'dev-secret',
+  'dev-secret-for-local-development-only!',
+  'change-me-in-production',
+];
 
 export interface ResolvedJwtSecrets {
   /** The active secret used to sign newly issued tokens. */
@@ -46,8 +50,8 @@ export function resolveJwtSecrets(env: NodeJS.ProcessEnv = process.env): Resolve
           ' characters) is required in production.',
       );
     }
-    // Development convenience only.
-    return { current: 'dev-secret' };
+    // Development convenience only — must still meet minimum length.
+    return { current: 'dev-secret-for-local-development-only!' };
   }
 
   if (INSECURE_JWT_SECRETS.includes(current)) {

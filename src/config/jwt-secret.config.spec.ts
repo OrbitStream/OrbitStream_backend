@@ -5,6 +5,8 @@ import {
   INSECURE_JWT_SECRETS,
 } from './jwt-secret.config';
 
+const DEV_FALLBACK = 'dev-secret-for-local-development-only!';
+
 const STRONG = 'a'.repeat(MIN_JWT_SECRET_LENGTH); // 32 chars
 const STRONG_2 = 'b'.repeat(MIN_JWT_SECRET_LENGTH);
 
@@ -73,10 +75,16 @@ describe('resolveJwtSecrets', () => {
   });
 
   describe('development convenience', () => {
-    it('falls back to dev-secret when unset in development', () => {
-      expect(resolveJwtSecrets(env({ NODE_ENV: 'development' }))).toEqual({
-        current: 'dev-secret',
-      });
+    it('falls back to a long-enough secret when unset in development', () => {
+      const result = resolveJwtSecrets(env({ NODE_ENV: 'development' }));
+      expect(result).toEqual({ current: DEV_FALLBACK });
+      expect(result.current.length).toBeGreaterThanOrEqual(MIN_JWT_SECRET_LENGTH);
+    });
+
+    it('rejects the dev fallback in production', () => {
+      expect(() =>
+        resolveJwtSecrets(env({ NODE_ENV: 'production', JWT_SECRET: DEV_FALLBACK })),
+      ).toThrow(/insecure placeholder/);
     });
 
     it('allows the placeholder secret in development', () => {
