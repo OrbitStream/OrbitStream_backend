@@ -8,6 +8,7 @@ import {
   MaxLength,
   ValidateIf,
 } from 'class-validator';
+import { IsNotInternalUrl } from './is-not-internal-url.validator';
 
 const STELLAR_ADDRESS_REGEX = /^G[A-Z0-9]{55}$/;
 
@@ -41,6 +42,7 @@ export class UpdateMerchantDto {
 
 export class SetWebhookDto {
   @IsUrl({}, { message: 'Invalid URL format' })
+  @IsNotInternalUrl({ message: 'Webhook URL must not point to a private or internal network address' })
   @ValidateIf(() => process.env.NODE_ENV === 'production')
   @Matches(/^https:\/\//, {
     message: 'Webhook URL must use HTTPS in production',
