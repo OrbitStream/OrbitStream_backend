@@ -1,12 +1,6 @@
-import { registerDecorator, ValidationOptions, ValidationArguments } from 'class-validator';
+import { registerDecorator, ValidationOptions } from 'class-validator';
 
-const BLOCKED_HOSTS = [
-  'localhost',
-  '127.0.0.1',
-  '0.0.0.0',
-  '::1',
-  'metadata.google.internal',
-];
+const BLOCKED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '::1', 'metadata.google.internal'];
 
 const PRIVATE_IP_RANGES = [
   /^10\./,
@@ -32,7 +26,7 @@ export function IsNotInternalUrl(validationOptions?: ValidationOptions) {
       propertyName,
       options: validationOptions,
       validator: {
-        validate(value: any, _args: ValidationArguments) {
+        validate(value: any) {
           if (typeof value !== 'string') return false;
           try {
             const url = new URL(value);
@@ -42,7 +36,7 @@ export function IsNotInternalUrl(validationOptions?: ValidationOptions) {
             return false;
           }
         },
-        defaultMessage(_args: ValidationArguments) {
+        defaultMessage() {
           return 'URL must not point to a private or internal network address';
         },
       },

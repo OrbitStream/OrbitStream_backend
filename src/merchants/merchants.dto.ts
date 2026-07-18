@@ -42,7 +42,9 @@ export class UpdateMerchantDto {
 
 export class SetWebhookDto {
   @IsUrl({}, { message: 'Invalid URL format' })
-  @IsNotInternalUrl({ message: 'Webhook URL must not point to a private or internal network address' })
+  @IsNotInternalUrl({
+    message: 'Webhook URL must not point to a private or internal network address',
+  })
   @ValidateIf(() => process.env.NODE_ENV === 'production')
   @Matches(/^https:\/\//, {
     message: 'Webhook URL must use HTTPS in production',
