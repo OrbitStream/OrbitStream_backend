@@ -32,7 +32,7 @@ export function resolveRule(method: string, path: string): RateLimitRule {
   const m = method.toUpperCase();
 
   // Auth: tight per-IP limit on credential endpoints.
-  if (path === '/auth/login' || path === '/auth/verify') {
+  if (path === '/auth/verify') {
     return { name: 'auth', limit: 5, scope: 'ip' };
   }
 

@@ -6,7 +6,7 @@ describe('isExempt', () => {
     expect(isExempt(path)).toBe(true);
   });
 
-  it.each(['/auth/login', '/v1/checkout/sessions', '/healthz', '/metricsfoo'])(
+  it.each(['/auth/verify', '/v1/checkout/sessions', '/healthz', '/metricsfoo'])(
     'does not exempt %s',
     (path) => {
       expect(isExempt(path)).toBe(false);
@@ -15,8 +15,7 @@ describe('isExempt', () => {
 });
 
 describe('resolveRule', () => {
-  it('limits /auth/login and /auth/verify to 5/min per IP', () => {
-    expect(resolveRule('POST', '/auth/login')).toMatchObject({ limit: 5, scope: 'ip' });
+  it('limits /auth/verify to 5/min per IP', () => {
     expect(resolveRule('POST', '/auth/verify')).toMatchObject({ limit: 5, scope: 'ip' });
   });
 

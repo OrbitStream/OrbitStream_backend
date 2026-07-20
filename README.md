@@ -82,7 +82,8 @@ npm run start:prod   # production
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/merchants/register` | — | Register merchant |
-| `POST` | `/auth/login` | — | Wallet login, returns JWT |
+| `POST` | `/auth/challenge` | — | Request SEP-10 challenge |
+| `POST` | `/auth/verify` | — | Verify signed challenge, returns JWT |
 | `GET` | `/merchants/me` | JWT | Get profile |
 | `PATCH` | `/merchants/me` | JWT | Update profile |
 | `POST` | `/merchants/me/api-keys` | JWT | Generate API key |

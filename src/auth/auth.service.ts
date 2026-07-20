@@ -310,12 +310,6 @@ export class AuthService {
     };
   }
 
-  async walletLogin(dto: { walletAddress: string }) {
-    const { walletAddress } = dto;
-    const payload = { sub: walletAddress, walletAddress, authMethod: 'wallet' };
-    return { access_token: this.jwt.sign(payload), wallet: walletAddress };
-  }
-
   /**
    * Re-issue a token signed with the CURRENT secret. Used during secret rotation:
    * a client whose token only verified against `JWT_SECRET_PREVIOUS` can exchange

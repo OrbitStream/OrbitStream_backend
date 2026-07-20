@@ -33,12 +33,3 @@ export class VerifyChallengeDto {
   @IsNotEmpty()
   transaction: SignedTransactionDto;
 }
-
-export class WalletLoginDto {
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/^G[A-Z0-9]{55}$/, {
-    message: 'Must be a valid Stellar public key (starts with G, 56 chars)',
-  })
-  walletAddress: string;
-}
