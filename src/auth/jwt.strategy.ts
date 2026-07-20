@@ -3,6 +3,9 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import * as jwt from 'jsonwebtoken';
 import { resolveJwtSecrets } from '../config/jwt-secret.config';
+import { db } from '../db/index';
+import { merchants } from '../db/schema';
+import { eq } from 'drizzle-orm';
 
 /**
  * JWT strategy with rotation support.
@@ -56,8 +59,20 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(req: any, payload: any) {
+    const walletAddress = payload.walletAddress;
+
+    const merchant = await db.query.merchants.findFirst({
+      where: eq(merchants.walletAddress, walletAddress),
+      columns: { id: true },
+    });
+
+    if (merchant) {
+      req.merchantId = merchant.id;
+    }
+
     return {
-      walletAddress: payload.walletAddress,
+      walletAddress,
+      merchantId: merchant?.id ?? null,
       viaPreviousSecret: req?.jwtViaPreviousSecret === true,
     };
   }
