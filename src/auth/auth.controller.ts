@@ -1,7 +1,7 @@
 import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Request } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service';
-import { WalletLoginDto, RequestChallengeDto, VerifyChallengeDto } from './auth.dto';
+import { RequestChallengeDto, VerifyChallengeDto } from './auth.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -17,12 +17,6 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   verifyChallenge(@Body() dto: VerifyChallengeDto) {
     return this.auth.verifyChallenge(dto);
-  }
-
-  @Post('login')
-  @HttpCode(HttpStatus.OK)
-  login(@Body() dto: WalletLoginDto) {
-    return this.auth.walletLogin(dto);
   }
 
   /**

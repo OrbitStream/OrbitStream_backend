@@ -58,7 +58,7 @@ describe('RateLimitMiddleware', () => {
     const { middleware } = buildMiddleware();
     const { res, headers } = mockRes();
     const next = jest.fn();
-    await middleware.use(mockReq('POST', '/auth/login'), res, next);
+    await middleware.use(mockReq('POST', '/auth/verify'), res, next);
 
     expect(next).toHaveBeenCalled();
     expect(headers['X-RateLimit-Limit']).toBe('5');

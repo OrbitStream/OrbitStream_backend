@@ -113,14 +113,14 @@ describe('DynamicCorsMiddleware - route grouping', () => {
   });
 
   it('allows platform domain on /auth/ routes', async () => {
-    const { req, res, next } = mockReqRes('/auth/login', 'POST', 'http://localhost:3001');
+    const { req, res, next } = mockReqRes('/auth/verify', 'POST', 'http://localhost:3001');
     await middleware.use(req, res, next);
     expect(res._headers['Access-Control-Allow-Origin']).toBe('http://localhost:3001');
     expect(next).toHaveBeenCalled();
   });
 
   it('blocks unknown origin on /auth/ routes', async () => {
-    const { req, res, next } = mockReqRes('/auth/login', 'POST', 'https://evil.com');
+    const { req, res, next } = mockReqRes('/auth/verify', 'POST', 'https://evil.com');
     await middleware.use(req, res, next);
     expect(res._status).toBe(403);
     expect(next).not.toHaveBeenCalled();
