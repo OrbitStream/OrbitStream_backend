@@ -12,7 +12,7 @@ const PRIVATE_IP_RANGES = [
 ];
 
 function isPrivateOrReservedHost(hostname: string): boolean {
-  const lower = hostname.toLowerCase();
+  const lower = hostname.toLowerCase().replace(/^\[|\]$/g, '');
   if (BLOCKED_HOSTS.includes(lower)) return true;
   if (PRIVATE_IP_RANGES.some((re) => re.test(lower))) return true;
   return false;

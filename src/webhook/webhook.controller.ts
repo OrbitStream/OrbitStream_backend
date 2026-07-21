@@ -16,9 +16,13 @@ import { WebhookService } from './webhook.service';
 import { MerchantsService } from '../merchants/merchants.service';
 import { ApiKeyGuard } from '../auth/api-key.guard';
 import { IsArray, IsString, IsUrl } from 'class-validator';
+import { IsNotInternalUrl } from '../merchants/is-not-internal-url.validator';
 
-class CreateWebhookEndpointDto {
+export class CreateWebhookEndpointDto {
   @IsUrl({}, { message: 'Invalid URL format' })
+  @IsNotInternalUrl({
+    message: 'Webhook URL must not point to a private or internal network address',
+  })
   url: string;
 
   @IsArray()
