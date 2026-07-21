@@ -37,6 +37,16 @@ jest.mock('axios', () => {
 
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
+jest.mock('../db/index', () => ({
+  db: {
+    query: {
+      merchants: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    },
+  },
+}));
+
 // process.env.JWT_SECRET is set to 'test-secret-with-at-least-32-characters' in jest-setup.ts
 const JWT_SECRET = process.env.JWT_SECRET!;
 const serverKeypair = StellarSdk.Keypair.random();
