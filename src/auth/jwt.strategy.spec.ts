@@ -67,7 +67,11 @@ describe('JwtStrategy (rotation)', () => {
     expect(req.jwtViaPreviousSecret).toBeUndefined();
 
     const result = await strategy.validate(req, { walletAddress: 'GABC' });
-    expect(result).toEqual({ walletAddress: 'GABC', merchantId: 'merchant-123', viaPreviousSecret: false });
+    expect(result).toEqual({
+      walletAddress: 'GABC',
+      merchantId: 'merchant-123',
+      viaPreviousSecret: false,
+    });
     expect(req.merchantId).toBe('merchant-123');
   });
 
@@ -87,7 +91,11 @@ describe('JwtStrategy (rotation)', () => {
     expect(req.jwtViaPreviousSecret).toBe(true);
 
     const result = await strategy.validate(req, { walletAddress: 'GXYZ' });
-    expect(result).toEqual({ walletAddress: 'GXYZ', merchantId: 'merchant-456', viaPreviousSecret: true });
+    expect(result).toEqual({
+      walletAddress: 'GXYZ',
+      merchantId: 'merchant-456',
+      viaPreviousSecret: true,
+    });
     expect(req.merchantId).toBe('merchant-456');
   });
 
@@ -115,11 +123,14 @@ describe('JwtStrategy (rotation)', () => {
     (db.query.merchants.findFirst as jest.Mock).mockResolvedValue(null);
 
     const strategy = new JwtStrategy();
-    const token = jwt.sign({ walletAddress: 'GUNREGISTERED' }, CURRENT);
     const req: any = {};
 
     const result = await strategy.validate(req, { walletAddress: 'GUNREGISTERED' });
-    expect(result).toEqual({ walletAddress: 'GUNREGISTERED', merchantId: null, viaPreviousSecret: false });
+    expect(result).toEqual({
+      walletAddress: 'GUNREGISTERED',
+      merchantId: null,
+      viaPreviousSecret: false,
+    });
     expect(req.merchantId).toBeUndefined();
   });
 });
