@@ -1,5 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
-import { WebhookController } from '../webhook/webhook.controller';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { WebhookController, CreateWebhookEndpointDto } from '../webhook/webhook.controller';
 
 const REQ = { user: { walletAddress: 'GWALLET' } };
 const MERCHANT = { id: 'merchant-1' };
@@ -89,5 +91,43 @@ describe('WebhookController', () => {
         NotFoundException,
       );
     });
+  });
+});
+
+describe('CreateWebhookEndpointDto URL validation', () => {
+  it.each([
+    ['http://127.0.0.1/webhook', 'localhost'],
+    ['http://localhost:3000/webhook', 'localhost'],
+    ['http://0.0.0.0/webhook', 'localhost'],
+    ['http://[::1]/webhook', 'localhost'],
+    ['http://10.0.0.1/webhook', 'private IP 10.x.x.x'],
+    ['http://172.16.0.1/webhook', 'private IP 172.16-31.x.x'],
+    ['http://192.168.1.1/webhook', 'private IP 192.168.x.x'],
+    ['http://169.254.169.254/metadata', 'cloud metadata IP'],
+    ['http://metadata.google.internal/metadata', 'GCP metadata'],
+    ['http://fc00::1/webhook', 'IPv6 private'],
+    ['http://fe80::1/webhook', 'IPv6 link-local'],
+  ])('rejects internal URL %s (%s)', async (url) => {
+    const dto = plainToInstance(CreateWebhookEndpointDto, {
+      url,
+      events: ['payment.paid'],
+    });
+    const errors = await validate(dto);
+    const urlErrors = errors.filter((e) => e.property === 'url');
+    expect(urlErrors.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['https://example.com/webhook', 'public domain'],
+    ['https://api.stripe.com/webhook', 'external API'],
+    ['https://webhook.site/abc123', 'webhook testing service'],
+  ])('accepts external URL %s (%s)', async (url) => {
+    const dto = plainToInstance(CreateWebhookEndpointDto, {
+      url,
+      events: ['payment.paid'],
+    });
+    const errors = await validate(dto);
+    const urlErrors = errors.filter((e) => e.property === 'url' && e.constraints?.isNotInternalUrl);
+    expect(urlErrors.length).toBe(0);
   });
 });
