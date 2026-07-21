@@ -1,10 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
-import {
-  WebhookController,
-  CreateWebhookEndpointDto,
-} from '../webhook/webhook.controller';
+import { WebhookController, CreateWebhookEndpointDto } from '../webhook/webhook.controller';
 
 const REQ = { user: { walletAddress: 'GWALLET' } };
 const MERCHANT = { id: 'merchant-1' };
@@ -130,9 +127,7 @@ describe('CreateWebhookEndpointDto URL validation', () => {
       events: ['payment.paid'],
     });
     const errors = await validate(dto);
-    const urlErrors = errors.filter(
-      (e) => e.property === 'url' && e.constraints?.isNotInternalUrl,
-    );
+    const urlErrors = errors.filter((e) => e.property === 'url' && e.constraints?.isNotInternalUrl);
     expect(urlErrors.length).toBe(0);
   });
 });
