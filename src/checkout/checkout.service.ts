@@ -77,7 +77,7 @@ export class CheckoutService {
     if (session.status === 'pending' && new Date() > session.expiresAt) {
       await db
         .update(checkoutSessions)
-        .set({ status: 'expired' } as any)
+        .set({ status: 'expired', statusChangedAt: new Date() } as any)
         .where(eq(checkoutSessions.id, sessionId));
       return { ...this.toPublicSession(session), status: 'expired' as const };
     }
@@ -107,7 +107,7 @@ export class CheckoutService {
 
     const [updated] = await db
       .update(checkoutSessions)
-      .set({ status: 'cancelled' } as any)
+      .set({ status: 'cancelled', statusChangedAt: new Date() } as any)
       .where(eq(checkoutSessions.id, sessionId))
       .returning();
 
@@ -124,7 +124,7 @@ export class CheckoutService {
   async markAsPaid(sessionId: string) {
     const [updated] = await db
       .update(checkoutSessions)
-      .set({ status: 'paid' } as any)
+      .set({ status: 'paid', statusChangedAt: new Date() } as any)
       .where(eq(checkoutSessions.id, sessionId))
       .returning();
     return updated;

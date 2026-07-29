@@ -266,5 +266,11 @@ describe('PaymentCursorService', () => {
       expect(service.isAhead(larger, large)).toBe(true);
       expect(service.isAhead(large, larger)).toBe(false);
     });
+
+    it('handles "now" default cursor safely without throwing SyntaxError', () => {
+      expect(service.isAhead('now', '100')).toBe(true);
+      expect(service.isAhead('100', 'now')).toBe(false);
+      expect(service.isAhead('now', 'now')).toBe(false);
+    });
   });
 });

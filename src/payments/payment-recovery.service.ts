@@ -5,6 +5,7 @@ import { checkoutSessions, payments } from '../db/schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { StellarService } from '../stellar/stellar.service';
 import { WebhookService } from '../webhook/webhook.service';
+import { areAmountsEqual } from './amount-utils';
 
 const STALE_MINUTES = 5;
 
@@ -70,7 +71,7 @@ export class PaymentRecoveryService {
     const stuck = (await db.execute(sql`
       SELECT id, merchant_id, memo, amount, asset_code, asset_issuer, receiving_account
       FROM checkout_sessions
-      WHERE status = 'processing' AND created_at < ${staleThreshold}
+      WHERE status = 'processing' AND status_changed_at < ${staleThreshold}
     `)) as unknown as StuckProcessingRow[];
 
     if (!stuck.length) return;
@@ -125,7 +126,7 @@ export class PaymentRecoveryService {
 
       await tx
         .update(checkoutSessions)
-        .set({ status: 'paid' } as any)
+        .set({ status: 'paid', statusChangedAt: new Date() } as any)
         .where(eq(checkoutSessions.id, row.id));
     });
 
@@ -150,13 +151,12 @@ export class PaymentRecoveryService {
       'desc',
     );
 
-    const sessionAmount = parseFloat(row.amount);
     return (
       records.find(
         (r: any) =>
           r.type === 'payment' &&
           r.transaction_memo === row.memo &&
-          Math.abs(parseFloat(r.amount) - sessionAmount) < 0.0000001 &&
+          areAmountsEqual(r.amount, row.amount) &&
           (r.asset_code === row.asset_code || row.asset_code === 'XLM'),
       ) ?? null
     );
@@ -166,7 +166,7 @@ export class PaymentRecoveryService {
   private async revertToPending(sessionId: string): Promise<void> {
     await db
       .update(checkoutSessions)
-      .set({ status: 'pending' } as any)
+      .set({ status: 'pending', statusChangedAt: new Date() } as any)
       .where(and(eq(checkoutSessions.id, sessionId), eq(checkoutSessions.status, 'processing')));
     this.logger.log(`Reverted session ${sessionId} to pending for re-detection`);
   }
@@ -189,7 +189,7 @@ export class PaymentRecoveryService {
       try {
         await db
           .update(checkoutSessions)
-          .set({ status: 'paid' } as any)
+          .set({ status: 'paid', statusChangedAt: new Date() } as any)
           .where(eq(checkoutSessions.id, row.id));
 
         this.logger.log(`Recovered session ${row.id} — marked as paid`);
@@ -229,13 +229,13 @@ export class PaymentRecoveryService {
       if (paymentExists) {
         await db
           .update(checkoutSessions)
-          .set({ status: 'paid' } as any)
+          .set({ status: 'paid', statusChangedAt: new Date() } as any)
           .where(eq(checkoutSessions.id, row.id));
         this.logger.log(`Recovered stale session ${row.id} — payment exists, marked as paid`);
       } else {
         await db
           .update(checkoutSessions)
-          .set({ status: 'expired' } as any)
+          .set({ status: 'expired', statusChangedAt: new Date() } as any)
           .where(eq(checkoutSessions.id, row.id));
         this.logger.log(`Recovered stale session ${row.id} — no payment, marked as expired`);
       }

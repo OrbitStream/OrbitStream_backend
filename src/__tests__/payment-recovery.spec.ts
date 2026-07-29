@@ -76,6 +76,17 @@ describe('PaymentRecoveryService', () => {
       expect(mockDb.transaction).not.toHaveBeenCalled();
     });
 
+    it('queries stuck processing sessions based on status_changed_at', async () => {
+      (mockDb.execute as jest.Mock).mockResolvedValueOnce([]);
+
+      await (service as any).recoverStuckProcessing();
+
+      expect(mockDb.execute).toHaveBeenCalled();
+      const sqlObj = (mockDb.execute as jest.Mock).mock.calls[0][0];
+      const queryStr = JSON.stringify(sqlObj);
+      expect(queryStr).toContain('status_changed_at');
+    });
+
     it('completes the payment when Horizon confirms a matching transaction', async () => {
       (mockDb.execute as jest.Mock).mockResolvedValueOnce([stuckRow]);
       (mockStellar.getPaymentsForAccount as jest.Mock).mockResolvedValue([

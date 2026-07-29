@@ -70,6 +70,7 @@ export const checkoutSessions = pgTable('checkout_sessions', {
   cancelUrl: text('cancel_url'),
   metadata: jsonb('metadata'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  statusChangedAt: timestamp('status_changed_at', { withTimezone: true }).defaultNow().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
