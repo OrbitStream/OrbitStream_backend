@@ -288,6 +288,32 @@ describe('PaymentDetectorService - Transaction Wrapping', () => {
       expect(claim.updateMock).not.toHaveBeenCalled();
     });
 
+    it('accepts payment with matching large amount (7 decimal places)', async () => {
+      const largeAmt = '123456789012345.1234567';
+      const claim = createClaimTx({ ...baseSession, amount: largeAmt });
+      const finalize = createFinalizeTx();
+      (mockDb.transaction as jest.Mock)
+        .mockImplementationOnce(async (fn: (tx: any) => Promise<any>) => fn(claim.tx))
+        .mockImplementationOnce(async (fn: (tx: any) => Promise<any>) => fn(finalize.tx));
+
+      await (service as any).processPayment(buildOp({ amount: largeAmt }));
+
+      expect(claim.updateMock).toHaveBeenCalled();
+      expect(finalize.insertMock).toHaveBeenCalled();
+    });
+
+    it('rejects payment when 7th decimal place differs on large amount', async () => {
+      const claim = createClaimTx({ ...baseSession, amount: '123456789012345.1234567' });
+      (mockDb.transaction as jest.Mock).mockImplementationOnce(
+        async (fn: (tx: any) => Promise<any>) => fn(claim.tx),
+      );
+
+      await (service as any).processPayment(buildOp({ amount: '123456789012345.1234568' }));
+
+      expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+      expect(claim.updateMock).not.toHaveBeenCalled();
+    });
+
     it('rejects payment with asset mismatch', async () => {
       const claim = createClaimTx({ ...baseSession });
       (mockDb.transaction as jest.Mock).mockImplementationOnce(

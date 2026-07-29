@@ -9,6 +9,7 @@ import { WebhookService } from '../webhook/webhook.service';
 import { MetricsService } from '../monitoring/metrics.service';
 import { PaymentCursorService, PERSIST_EVERY } from './payment-cursor.service';
 import { Config } from '../config/config.schema';
+import { areAmountsEqual } from './amount-utils';
 
 interface LockedSessionRow {
   id: string;
@@ -174,7 +175,7 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
 
         await tx
           .update(checkoutSessions)
-          .set({ status: 'paid' } as any)
+          .set({ status: 'paid', statusChangedAt: new Date() } as any)
           .where(eq(checkoutSessions.id, session.id));
       });
     } catch (err) {
@@ -229,11 +230,9 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
         return null;
       }
 
-      const opAmount = parseFloat(op.amount);
-      const sessionAmount = parseFloat(session.amount);
-      if (Math.abs(opAmount - sessionAmount) > 0.0000001) {
+      if (!areAmountsEqual(op.amount, session.amount)) {
         this.logger.warn(
-          `Amount mismatch for memo ${memo}: expected ${sessionAmount}, got ${opAmount}`,
+          `Amount mismatch for memo ${memo}: expected ${session.amount}, got ${op.amount}`,
         );
         return null;
       }
@@ -257,7 +256,7 @@ export class PaymentDetectorService implements OnModuleInit, OnModuleDestroy {
 
       const claimed = await tx
         .update(checkoutSessions)
-        .set({ status: 'processing' } as any)
+        .set({ status: 'processing', statusChangedAt: new Date() } as any)
         .where(and(eq(checkoutSessions.id, session.id), eq(checkoutSessions.status, 'pending')))
         .returning({ id: checkoutSessions.id });
 

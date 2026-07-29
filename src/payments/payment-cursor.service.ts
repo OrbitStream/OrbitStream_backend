@@ -132,10 +132,17 @@ export class PaymentCursorService {
 
   // ── Utilities ────────────────────────────────────────────────────────────────
 
-  /** Paging tokens are numeric strings. Returns true if a > b. */
+  /** Paging tokens are numeric strings. Returns true if a > b. Handles non-numeric cursors like 'now'. */
   isAhead(a: string, b: string): boolean {
-    const na = BigInt(a);
-    const nb = BigInt(b);
-    return na > nb;
+    const isNumA = /^\d+$/.test(a);
+    const isNumB = /^\d+$/.test(b);
+
+    if (isNumA && isNumB) {
+      return BigInt(a) > BigInt(b);
+    }
+    if (!isNumA && isNumB) {
+      return true;
+    }
+    return false;
   }
 }
