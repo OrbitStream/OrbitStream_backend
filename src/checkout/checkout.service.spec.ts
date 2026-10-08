@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CheckoutService } from './checkout.service';
 import { AuditService } from '../audit/audit.service';
@@ -241,6 +241,25 @@ describe('CheckoutService', () => {
       );
     });
   });
+
+      it('should throw ConflictException if session was concurrently updated during atomic cancel', async () => {
+      (db.query.checkoutSessions.findFirst as jest.Mock).mockResolvedValue({
+        id: 'sess-1',
+        merchantId: 'merchant-1',
+        status: 'pending',
+      });
+      (db.update as jest.Mock).mockReturnValue({
+        set: jest.fn().mockReturnValue({
+          where: jest.fn().mockReturnValue({
+            returning: jest.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      await expect(service.cancelSession('sess-1', 'merchant-1')).rejects.toThrow(
+        ConflictException,
+      );
+    });
 
   describe('markAsPaid', () => {
     it('should update session status to "paid"', async () => {
