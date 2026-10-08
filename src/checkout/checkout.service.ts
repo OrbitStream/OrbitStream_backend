@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { db } from '../db/index';
 import { checkoutSessions, payments } from '../db/schema';
@@ -108,8 +108,12 @@ export class CheckoutService {
     const [updated] = await db
       .update(checkoutSessions)
       .set({ status: 'cancelled', statusChangedAt: new Date() } as any)
-      .where(eq(checkoutSessions.id, sessionId))
+      .where(and(eq(checkoutSessions.id, sessionId), eq(checkoutSessions.status, 'pending')))
       .returning();
+
+    if (!updated) {
+      throw new ConflictException('Session status changed concurrently; cannot cancel non-pending session');
+    }
 
     await this.auditService.logSensitiveOperation({
       merchantId,
